@@ -12,6 +12,9 @@ module.exports = {
   async execute(client) {
     console.log(`🎉 READY EVENT FIRED! Bot logged in as ${client.user.tag}!`);
 
+    // NUCLEAR OPTION: Force command refresh immediately
+    await forceCommandRefresh(client);
+    
     try {
       // Initialize core systems
       console.log('🔄 Initializing attachment counter...');
@@ -28,38 +31,11 @@ module.exports = {
       interactionHandler.setScheduler(scheduler);
       console.log('✅ Scheduler initialized and set in interaction handler!');
 
-      // Register slash commands
-      console.log('🔄 Registering slash commands...');
-      const rest = new REST({ version: '10' }).setToken(config.botToken);
-      const commands = commandHandler.getCommands();
-      
-      console.log(`📋 Commands to register:`, commands.map(cmd => cmd.name));
-      
-      if (commands.length > 0) {
-        console.log(`🔄 Registering ${commands.length} commands...`);
-        
-        const data = await rest.put(
-          Routes.applicationCommands(client.user.id),
-          { body: commands }
-        );
-        
-        console.log(`✅ Successfully registered ${commands.length} application commands!`);
-      } else {
-        console.log('ℹ️  No commands to register');
-      }
-
       // Start the weekly scheduler
       console.log('🔄 Starting weekly scheduler...');
       scheduler.scheduleWeeklyReport();
       console.log('⏰ Weekly report scheduler started!');
 
-      // Calculate next report time
-      const now = new Date();
-      const nextFriday = new Date();
-      nextFriday.setDate(now.getDate() + (5 - now.getDay() + 7) % 7);
-      nextFriday.setHours(14, 0, 0, 0); // 2 PM Riyadh time
-      
-      console.log(`📅 Next automated report: ${nextFriday.toLocaleString()} (Riyadh Time)`);
       console.log('🤖 Attachment Counter Bot is fully operational!');
 
     } catch (error) {
@@ -67,3 +43,40 @@ module.exports = {
     }
   }
 };
+
+// NUCLEAR COMMAND REFRESH FUNCTION
+async function forceCommandRefresh(client) {
+  console.log('💥 STARTING NUCLEAR COMMAND REFRESH...');
+  
+  const rest = new REST({ version: '10' }).setToken(config.botToken);
+  
+  try {
+    // Step 1: Get current commands
+    const currentCommands = await rest.get(Routes.applicationCommands(client.user.id));
+    console.log(`📋 Found ${currentCommands.length} current commands:`, currentCommands.map(cmd => cmd.name));
+    
+    // Step 2: DELETE ALL COMMANDS
+    console.log('🗑️ DELETING ALL COMMANDS...');
+    await rest.put(Routes.applicationCommands(client.user.id), { body: [] });
+    console.log('✅ ALL COMMANDS DELETED!');
+    
+    // Step 3: Wait 3 seconds
+    console.log('⏳ Waiting 3 seconds...');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // Step 4: Register our commands
+    const commands = commandHandler.getCommands();
+    console.log(`🔄 Registering ${commands.length} commands:`, commands.map(cmd => cmd.name));
+    
+    const data = await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: commands }
+    );
+    
+    console.log(`✅ SUCCESS! Registered ${data.length} commands:`, data.map(cmd => cmd.name));
+    console.log('🎉 NUCLEAR REFRESH COMPLETE! Commands should appear in 1-2 minutes.');
+    
+  } catch (error) {
+    console.error('❌ Error during nuclear refresh:', error);
+  }
+}
