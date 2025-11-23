@@ -123,7 +123,7 @@ class ReportGenerator {
         }
       }
 
-      const channelText = Array.from(channelGroups.entries())
+      let channelText = Array.from(channelGroups.entries())
         .sort((a, b) => b[1].total - a[1].total)
         .slice(0, 6) // Limit to top 6 locations
         .map(([name, data]) => {
