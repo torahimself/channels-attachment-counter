@@ -103,7 +103,8 @@ class Scheduler {
   async generateManualReport(interaction = null) {
     if (this.isRunning) {
       if (interaction) {
-        await interaction.reply('⚠️ Report generation is already in progress!');
+        // Use editReply since we already deferred
+        await interaction.editReply('⚠️ Report generation is already in progress!');
       }
       return;
     }
@@ -112,7 +113,8 @@ class Scheduler {
     
     try {
       if (interaction) {
-        await interaction.deferReply(); // Use deferReply to avoid timeout
+        // Update the deferred reply instead of creating a new one
+        await interaction.editReply('🔄 Generating manual report... This may take a few minutes.');
       }
 
       console.log('🔄 Starting manual report generation...');
@@ -127,11 +129,8 @@ class Scheduler {
       
       if (interaction) {
         const errorMessage = '❌ Error generating report! Check console for details.';
-        if (interaction.replied || interaction.deferred) {
-          await interaction.editReply(errorMessage);
-        } else {
-          await interaction.reply({ content: errorMessage, ephemeral: true });
-        }
+        // Use editReply since we already deferred
+        await interaction.editReply(errorMessage);
       }
     } finally {
       this.isRunning = false;
