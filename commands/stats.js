@@ -24,9 +24,13 @@ module.exports = {
 
     console.log(`✅ User ${interaction.user.tag} has permission, proceeding with /stats`);
 
+    // Debug: Check what scheduler looks like
+    console.log(`🔍 Scheduler object:`, scheduler ? 'Exists' : 'NULL');
+    console.log(`🔍 Scheduler type:`, typeof scheduler);
+    
     if (!scheduler) {
       console.log('❌ Scheduler not available for /stats command');
-      await interaction.editReply('❌ Bot is still initializing. Please wait a moment and try again.');
+      await interaction.editReply('❌ Scheduler is not available. The bot may still be initializing or there was an error.');
       return;
     }
     
