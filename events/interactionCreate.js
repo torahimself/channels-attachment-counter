@@ -1,10 +1,11 @@
 const commandHandler = require('../handlers/commandHandler');
 
-// Global scheduler instance (we'll manage this differently)
+// Global scheduler instance
 let globalScheduler = null;
 
 function setScheduler(scheduler) {
   globalScheduler = scheduler;
+  console.log('✅ Scheduler set in interaction handler');
 }
 
 module.exports = {
@@ -22,15 +23,17 @@ module.exports = {
         console.log(`❌ No command matching ${interaction.commandName} was found.`);
         await interaction.reply({ 
           content: '❌ Command not found!', 
-          ephemeral: true 
+          flags: 64 // ephemeral
         });
         return;
       }
 
       // Execute the command with scheduler if available
       if (globalScheduler) {
+        console.log(`✅ Executing ${interaction.commandName} with scheduler`);
         await command.execute(interaction, globalScheduler);
       } else {
+        console.log(`⚠️ Executing ${interaction.commandName} without scheduler (scheduler not ready)`);
         await command.execute(interaction);
       }
       
@@ -44,12 +47,12 @@ module.exports = {
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp({ 
           content: errorMessage, 
-          ephemeral: true 
+          flags: 64 // ephemeral
         });
       } else {
         await interaction.reply({ 
           content: errorMessage, 
-          ephemeral: true 
+          flags: 64 // ephemeral
         });
       }
     }
