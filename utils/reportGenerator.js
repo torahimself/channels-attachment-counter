@@ -6,7 +6,7 @@ class ReportGenerator {
   }
 
   // Generate main report embed
-  generateMainReport(topUsers, categoryBreakdown, totalAttachments) {
+  generateMainReport(topUsers, channelBreakdown, totalAttachments) {
     const embed = new EmbedBuilder()
       .setTitle('📊 WEEKLY ATTACHMENT REPORT')
       .setColor(0x00AE86)
@@ -26,22 +26,26 @@ class ReportGenerator {
       });
     }
 
-    // Category Breakdown field
-    const categoryText = Array.from(categoryBreakdown.entries())
-      .map(([categoryId, data]) => 
-        `• **${data.name}** - **${data.total}** attachments (${data.channelCount} channels)`
+    // Channel Breakdown field (show top 10 channels only)
+    const sortedChannels = Array.from(channelBreakdown.entries())
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 10); // Show only top 10 channels
+
+    const channelText = sortedChannels
+      .map(([channelId, data]) => 
+        `• ${data.name} - **${data.total}** attachments`
       ).join('\n');
 
     embed.addFields({
-      name: '📁 Category Breakdown',
-      value: categoryText || 'No categories scanned',
+      name: `📁 Top Channels (${sortedChannels.length} of ${channelBreakdown.size})`,
+      value: channelText || 'No channels with attachments',
       inline: false
     });
 
     // Totals field
     embed.addFields({
       name: '📈 Summary',
-      value: `**Total Attachments:** ${totalAttachments}\n**Top Contributors:** ${topUsers.length} users\n**Categories Scanned:** ${categoryBreakdown.size}`,
+      value: `**Total Attachments:** ${totalAttachments}\n**Top Contributors:** ${topUsers.length} users\n**Channels Scanned:** ${channelBreakdown.size}`,
       inline: true
     });
 
@@ -58,7 +62,7 @@ class ReportGenerator {
     return embed;
   }
 
-  // Generate individual user embed
+  // Generate individual user embed with better forum display
   generateUserEmbed(userId, userData, client) {
     const user = client.users.cache.get(userId);
     const username = user ? user.tag : userData.username;
@@ -83,23 +87,50 @@ class ReportGenerator {
       inline: true
     });
 
-    // Channels breakdown
+    // Channels breakdown (with forum thread grouping)
     if (userData.channels.size > 0) {
-      const channelText = Array.from(userData.channels.entries())
-        .slice(0, 10) // Limit to top 10 channels
-        .map(([channelId, count]) => {
-          const channel = client.channels.cache.get(channelId);
-          const channelName = channel ? `#${channel.name}` : `Unknown Channel (${channelId})`;
-          return `• ${channelName}: **${count}** attachments`;
+      const channelGroups = new Map();
+      
+      // Group by parent channel (especially for forums)
+      for (const [channelKey, count] of userData.channels) {
+        if (channelKey.startsWith('forum-')) {
+          // Forum thread: forum-{forumId}-{threadId}
+          const parts = channelKey.split('-');
+          const forumId = parts[1];
+          const forum = client.channels.cache.get(forumId);
+          const forumName = forum ? forum.name : `Forum-${forumId}`;
+          
+          if (!channelGroups.has(forumName)) {
+            channelGroups.set(forumName, { total: 0, isForum: true });
+          }
+          channelGroups.get(forumName).total += count;
+        } else {
+          // Regular channel
+          const channel = client.channels.cache.get(channelKey);
+          const channelName = channel ? `#${channel.name}` : `Channel-${channelKey}`;
+          
+          if (!channelGroups.has(channelName)) {
+            channelGroups.set(channelName, { total: 0, isForum: false });
+          }
+          channelGroups.get(channelName).total += count;
+        }
+      }
+
+      const channelText = Array.from(channelGroups.entries())
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 8) // Limit to top 8 locations
+        .map(([name, data]) => {
+          const prefix = data.isForum ? '🏛️ ' : '• ';
+          return `${prefix}${name}: **${data.total}** attachments`;
         })
         .join('\n');
 
-      if (userData.channels.size > 10) {
-        channelText += `\n• ... and ${userData.channels.size - 10} more channels`;
+      if (channelGroups.size > 8) {
+        channelText += `\n• ... and ${channelGroups.size - 8} more locations`;
       }
 
       embed.addFields({
-        name: `📍 Channel Breakdown (${userData.channels.size} channels)`,
+        name: `📍 Activity Locations (${channelGroups.size} locations)`,
         value: channelText || 'No channel data',
         inline: false
       });
