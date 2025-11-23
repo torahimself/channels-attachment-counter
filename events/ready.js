@@ -48,6 +48,33 @@ module.exports = {
         console.log('ℹ️  No commands to register');
       }
 
+      // TEMPORARY: Force command refresh (delete this section after it works)
+      console.log('🔄 Starting temporary command refresh in 10 seconds...');
+      setTimeout(async () => {
+        console.log('🔄 Forcing command refresh...');
+        try {
+          // Clear all commands
+          await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: [] }
+          );
+          console.log('✅ Cleared all commands');
+          
+          // Re-register commands
+          const commands = commandHandler.getCommands();
+          if (commands.length > 0) {
+            const data = await rest.put(
+              Routes.applicationCommands(client.user.id),
+              { body: commands }
+            );
+            console.log(`✅ Re-registered ${commands.length} commands:`, data.map(cmd => cmd.name));
+          }
+        } catch (error) {
+          console.error('❌ Error refreshing commands:', error);
+        }
+      }, 10000); // Wait 10 seconds after startup
+      // END TEMPORARY SECTION
+
       // Start the weekly scheduler
       console.log('🔄 Starting weekly scheduler...');
       scheduler.scheduleWeeklyReport();
