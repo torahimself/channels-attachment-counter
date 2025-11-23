@@ -4,11 +4,7 @@ const commandHandler = require('../handlers/commandHandler');
 const AttachmentCounter = require('../utils/attachmentCounter');
 const ReportGenerator = require('../utils/reportGenerator');
 const Scheduler = require('../utils/scheduler');
-
-// Global instances to share across the bot
-let attachmentCounter;
-let reportGenerator;
-let scheduler;
+const interactionHandler = require('./interactionCreate');
 
 module.exports = {
   name: 'ready',
@@ -17,9 +13,12 @@ module.exports = {
     console.log(`✅ Bot logged in as ${client.user.tag}!`);
 
     // Initialize core systems
-    attachmentCounter = new AttachmentCounter(client);
-    reportGenerator = new ReportGenerator(client);
-    scheduler = new Scheduler(client, attachmentCounter, reportGenerator);
+    const attachmentCounter = new AttachmentCounter(client);
+    const reportGenerator = new ReportGenerator(client);
+    const scheduler = new Scheduler(client, attachmentCounter, reportGenerator);
+
+    // Share scheduler with interaction handler
+    interactionHandler.setScheduler(scheduler);
 
     // Register slash commands
     try {
@@ -56,8 +55,5 @@ module.exports = {
     
     console.log(`📅 Next automated report: ${nextFriday.toLocaleString()} (Riyadh Time)`);
     console.log('🤖 Attachment Counter Bot is fully operational!');
-  },
+  }
 };
-
-// Export instances for use in other files
-module.exports.getScheduler = () => scheduler;
