@@ -9,22 +9,14 @@ module.exports = {
     .setDescription('Check monthly media statistics (Placeholder)'),
   
   async execute(interaction) {
-    console.log(`🔧 /statsm command received from ${interaction.user.tag}`);
-    
     // Check if user has the allowed role
     const member = interaction.member;
     const hasAllowedRole = member.roles.cache.has(ALLOWED_ROLE_ID);
     
     if (!hasAllowedRole) {
-      console.log(`🚫 User ${interaction.user.tag} does not have permission for /statsm`);
-      await interaction.reply({ 
-        content: '❌ You do not have permission to use this command!', 
-        ephemeral: true 
-      });
+      await interaction.editReply('❌ You do not have permission to use this command!');
       return;
     }
-
-    console.log(`✅ User ${interaction.user.tag} has permission for /statsm`);
 
     const statusEmbed = {
       title: "📅 MONTHLY MEDIA STATISTICS",
@@ -53,9 +45,6 @@ module.exports = {
       }
     };
 
-    await interaction.reply({ 
-      embeds: [statusEmbed],
-      ephemeral: true 
-    });
+    await interaction.editReply({ embeds: [statusEmbed] });
   },
 };
