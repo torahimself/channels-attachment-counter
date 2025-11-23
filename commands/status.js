@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 
-// Role ID that can use /status command
+// Role ID that can use commands
 const ALLOWED_ROLE_ID = "1438249316559884499";
 
 module.exports = {
@@ -16,7 +16,7 @@ module.exports = {
     if (!hasAllowedRole) {
       await interaction.reply({ 
         content: '❌ You do not have permission to use this command!', 
-        ephemeral: true 
+        flags: 64 // ephemeral
       });
       return;
     }
@@ -74,6 +74,9 @@ module.exports = {
       }
     };
 
-    await interaction.reply({ embeds: [statusEmbed], ephemeral: true });
+    await interaction.reply({ 
+      embeds: [statusEmbed], 
+      flags: 64 // ephemeral
+    });
   },
 };
