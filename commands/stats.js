@@ -18,10 +18,7 @@ module.exports = {
     
     if (!hasAllowedRole) {
       console.log(`🚫 User ${interaction.user.tag} does not have permission for /stats`);
-      await interaction.reply({ 
-        content: '❌ You do not have permission to use this command!', 
-        flags: 64 // ephemeral
-      });
+      await interaction.editReply('❌ You do not have permission to use this command!');
       return;
     }
 
@@ -29,10 +26,7 @@ module.exports = {
 
     if (!scheduler) {
       console.log('❌ Scheduler not available for /stats command');
-      await interaction.reply({ 
-        content: '❌ Bot is still initializing. Please wait a moment and try again.', 
-        flags: 64 // ephemeral
-      });
+      await interaction.editReply('❌ Bot is still initializing. Please wait a moment and try again.');
       return;
     }
     
