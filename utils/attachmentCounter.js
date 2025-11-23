@@ -21,13 +21,32 @@ class AttachmentCounter {
     }));
   }
 
+  // Count both attachments and embeds
+  countMessageMedia(message) {
+    let count = 0;
+    
+    // Count file attachments (images, videos, files)
+    count += message.attachments.size;
+    
+    // Count embed media (links with rich embeds)
+    if (message.embeds.length > 0) {
+      message.embeds.forEach(embed => {
+        if (embed.image || embed.video || embed.thumbnail) {
+          count += 1;
+        }
+      });
+    }
+    
+    return count;
+  }
+
   // Scan forum threads (special handling for forums)
   async scanForumChannel(forumChannel, trackedRoles, sinceDate) {
     console.log(`🏛️  Scanning forum: ${forumChannel.name} (${forumChannel.id})`);
     
     const userStats = new Map();
     let totalThreads = 0;
-    let totalAttachments = 0;
+    let totalMedia = 0;
 
     try {
       // Fetch active threads in the forum
@@ -54,13 +73,13 @@ class AttachmentCounter {
               username: userData.username,
               total: 0,
               channels: new Map(),
-              roles: userData.roles // Store user roles
+              roles: userData.roles
             });
           }
 
           const overallData = userStats.get(userId);
           overallData.total += userData.total;
-          totalAttachments += userData.total;
+          totalMedia += userData.total;
 
           // Track forum thread as a "channel"
           const forumThreadKey = `forum-${forumChannel.id}-${thread.id}`;
@@ -75,7 +94,7 @@ class AttachmentCounter {
       console.error(`❌ Error scanning forum ${forumChannel.name}:`, error.message);
     }
 
-    console.log(`✅ Scanned ${totalThreads} threads in forum ${forumChannel.name}, found ${totalAttachments} attachments`);
+    console.log(`✅ Scanned ${totalThreads} threads in forum ${forumChannel.name}, found ${totalMedia} media items`);
     return userStats;
   }
 
@@ -85,7 +104,7 @@ class AttachmentCounter {
     
     const userStats = new Map();
     let messageCount = 0;
-    let attachmentCount = 0;
+    let mediaCount = 0;
 
     try {
       // Use proper limit (100 is Discord's maximum)
@@ -109,8 +128,8 @@ class AttachmentCounter {
           continue;
         }
 
-        const attachments = message.attachments.size;
-        if (attachments > 0) {
+        const mediaItems = this.countMessageMedia(message);
+        if (mediaItems > 0) {
           const userId = message.author.id;
           const username = message.author.tag;
 
@@ -119,16 +138,16 @@ class AttachmentCounter {
               username: username,
               total: 0,
               channels: new Map(),
-              roles: userRoles // Store user roles for debugging
+              roles: userRoles
             });
           }
 
           const userData = userStats.get(userId);
-          userData.total += attachments;
-          userData.channels.set(channel.id, (userData.channels.get(channel.id) || 0) + attachments);
+          userData.total += mediaItems;
+          userData.channels.set(channel.id, (userData.channels.get(channel.id) || 0) + mediaItems);
 
-          attachmentCount += attachments;
-          console.log(`📎 Found ${attachments} attachments from ${username} in ${channel.name}`);
+          mediaCount += mediaItems;
+          console.log(`📎 Found ${mediaItems} media items from ${username} in ${channel.name} (attachments: ${message.attachments.size}, embeds: ${message.embeds.length})`);
         }
 
         messageCount++;
@@ -138,7 +157,7 @@ class AttachmentCounter {
       console.error(`❌ Error scanning channel ${channel.name}:`, error.message);
     }
 
-    console.log(`✅ Scanned ${messageCount} messages in ${channel.name}, found ${attachmentCount} attachments`);
+    console.log(`✅ Scanned ${messageCount} messages in ${channel.name}, found ${mediaCount} media items (attachments + embeds)`);
     return userStats;
   }
 
@@ -192,11 +211,11 @@ class AttachmentCounter {
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    console.log(`🎯 Scan complete. Found ${allUserStats.size} users with attachments`);
+    console.log(`🎯 Scan complete. Found ${allUserStats.size} users with media items`);
     
     // Log user roles for debugging
     for (const [userId, userData] of allUserStats) {
-      console.log(`👤 ${userData.username} (${userId}) - ${userData.total} attachments - Roles:`, userData.roles.map(r => r.name));
+      console.log(`👤 ${userData.username} (${userId}) - ${userData.total} media items - Roles:`, userData.roles.map(r => r.name));
     }
     
     return allUserStats;
@@ -240,7 +259,7 @@ class AttachmentCounter {
         username: data.username,
         total: data.total,
         channelCount: data.channels.size,
-        roles: data.roles // Include roles in output
+        roles: data.roles
       }))
       .sort((a, b) => b.total - a.total)
       .slice(0, limit);
