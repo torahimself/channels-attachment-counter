@@ -8,16 +8,26 @@ class AttachmentCounter {
 
   // Check if user has any of the tracked roles
   userHasTrackedRole(member, trackedRoles) {
-    if (!member) return false;
+    if (!member) {
+      console.log(`❌ No member object provided for role check`);
+      return false;
+    }
     
     const hasRole = member.roles.cache.some(role => trackedRoles.includes(role.id));
     
-    // Debug logging for role checking
-    if (!hasRole && Math.random() < 0.05) { // 5% chance to log for debugging
-      console.log(`🔍 Role check for ${member.user.tag}:`);
-      console.log(`   Tracked roles needed: ${trackedRoles.join(', ')}`);
+    // Enhanced debugging
+    if (!hasRole) {
+      console.log(`🔍 Role check FAILED for ${member.user.tag}:`);
+      console.log(`   Needed roles: ${trackedRoles.join(', ')}`);
       console.log(`   User's role IDs: ${Array.from(member.roles.cache.keys()).join(', ')}`);
-      console.log(`   User's role names: ${member.roles.cache.map(r => r.name).join(', ')}`);
+      
+      // Check if any role IDs match
+      const matchingRoles = member.roles.cache.filter(role => trackedRoles.includes(role.id));
+      if (matchingRoles.size > 0) {
+        console.log(`   ⚠️  FOUND MATCHING ROLES:`, matchingRoles.map(r => `${r.name} (${r.id})`));
+      }
+    } else {
+      console.log(`✅ Role check PASSED for ${member.user.tag}`);
     }
     
     return hasRole;
@@ -133,7 +143,24 @@ class AttachmentCounter {
         // Only count messages from users with tracked roles
         if (message.author.bot) continue;
         
-        const hasTrackedRole = this.userHasTrackedRole(message.member, trackedRoles);
+        // Ensure we have member data
+        let member = message.member;
+        if (!member && message.guild) {
+          try {
+            member = await message.guild.members.fetch(message.author.id);
+            console.log(`🔍 Fetched member data for ${message.author.tag}`);
+          } catch (error) {
+            console.log(`❌ Could not fetch member data for ${message.author.tag}:`, error.message);
+            continue;
+          }
+        }
+
+        if (!member) {
+          console.log(`❌ No member data for ${message.author.tag}, skipping`);
+          continue;
+        }
+        
+        const hasTrackedRole = this.userHasTrackedRole(member, trackedRoles);
         
         if (!hasTrackedRole) {
           continue;
@@ -149,7 +176,7 @@ class AttachmentCounter {
               username: username,
               total: 0,
               channels: new Map(),
-              roles: this.getUserRoles(message.member)
+              roles: this.getUserRoles(member)
             });
           }
 
