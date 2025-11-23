@@ -1,5 +1,11 @@
 const commandHandler = require('../handlers/commandHandler');
-const { getScheduler } = require('./ready');
+
+// Global scheduler instance (we'll manage this differently)
+let globalScheduler = null;
+
+function setScheduler(scheduler) {
+  globalScheduler = scheduler;
+}
 
 module.exports = {
   name: 'interactionCreate',
@@ -10,31 +16,43 @@ module.exports = {
 
       console.log(`🔧 Command received: ${interaction.commandName}`);
       
-      const scheduler = getScheduler();
-      if (!scheduler) {
+      // Get the command from handler
+      const command = commandHandler.commands.get(interaction.commandName);
+      if (!command) {
+        console.log(`❌ No command matching ${interaction.commandName} was found.`);
         await interaction.reply({ 
-          content: '❌ Bot is still initializing, please try again in a moment.', 
+          content: '❌ Command not found!', 
           ephemeral: true 
         });
         return;
       }
 
-      await commandHandler.executeCommand(interaction, scheduler);
+      // Execute the command with scheduler if available
+      if (globalScheduler) {
+        await command.execute(interaction, globalScheduler);
+      } else {
+        await command.execute(interaction);
+      }
+      
+      console.log(`✅ Command executed: ${interaction.commandName}`);
       
     } catch (error) {
-      console.error(`❌ Error handling interaction:`, error);
+      console.error(`❌ Error executing command ${interaction.commandName}:`, error);
+      
+      const errorMessage = '❌ There was an error executing this command!';
       
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp({ 
-          content: 'There was an error executing this command!', 
+          content: errorMessage, 
           ephemeral: true 
         });
       } else {
         await interaction.reply({ 
-          content: 'There was an error executing this command!', 
+          content: errorMessage, 
           ephemeral: true 
         });
       }
     }
   },
+  setScheduler
 };
