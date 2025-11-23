@@ -48,6 +48,13 @@ class Scheduler {
         return;
       }
 
+      // Check if bot can send messages to report channel
+      const canSend = reportChannel.permissionsFor(this.client.user).has('SendMessages');
+      if (!canSend) {
+        console.log('❌ Bot cannot send messages to report channel');
+        return;
+      }
+
       console.log('🔍 Scanning for media...');
       const userStats = await this.attachmentCounter.scanChannels(config.channels, config.trackedRoles);
       
@@ -55,7 +62,11 @@ class Scheduler {
       
       if (userStats.size === 0) {
         console.log('ℹ️  No media found from tracked roles this week');
-        await reportChannel.send('@everyone\n📊 **WEEKLY MEDIA REPORT**\n\nNo media found from tracked roles this week. 📭');
+        try {
+          await reportChannel.send('@everyone\n📊 **WEEKLY MEDIA REPORT**\n\nNo media found from tracked roles this week. 📭');
+        } catch (error) {
+          console.error('❌ Cannot send to report channel:', error.message);
+        }
         return;
       }
 
@@ -68,10 +79,15 @@ class Scheduler {
       // Send main report
       console.log('📊 Generating main report...');
       const mainEmbed = this.reportGenerator.generateMainReport(topUsers, channelBreakdown, totalMedia);
-      await reportChannel.send({ 
-        content: '@everyone', 
-        embeds: [mainEmbed] 
-      });
+      try {
+        await reportChannel.send({ 
+          content: '@everyone', 
+          embeds: [mainEmbed] 
+        });
+      } catch (error) {
+        console.error('❌ Cannot send main report:', error.message);
+        return;
+      }
 
       // Send individual user reports
       console.log(`👤 Generating ${userStats.size} individual user reports...`);
@@ -86,7 +102,7 @@ class Scheduler {
             // Small delay to avoid rate limits
             await new Promise(resolve => setTimeout(resolve, 500));
           } catch (error) {
-            console.error(`❌ Error sending user report for ${userId}:`, error);
+            console.error(`❌ Error sending user report for ${userId}:`, error.message);
           }
         }
       }
