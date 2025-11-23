@@ -48,22 +48,26 @@ class Scheduler {
         return;
       }
 
-      console.log('🔍 Scanning for attachments...');
+      console.log('🔍 Scanning for media...');
       const userStats = await this.attachmentCounter.scanChannels(config.channels, config.trackedRoles);
       
+      console.log(`📊 Scan completed. Users found: ${userStats.size}`);
+      
       if (userStats.size === 0) {
-        console.log('ℹ️  No attachments found from tracked roles this week');
-        await reportChannel.send('@everyone\n📊 **WEEKLY ATTACHMENT REPORT**\n\nNo attachments found from tracked roles this week. 📭');
+        console.log('ℹ️  No media found from tracked roles this week');
+        await reportChannel.send('@everyone\n📊 **WEEKLY MEDIA REPORT**\n\nNo media found from tracked roles this week. 📭');
         return;
       }
 
       const topUsers = this.attachmentCounter.getTopUsers(userStats, 5);
       const channelBreakdown = this.attachmentCounter.getChannelBreakdown(userStats, config.channels);
-      const totalAttachments = this.reportGenerator.calculateTotalAttachments(userStats);
+      const totalMedia = this.reportGenerator.calculateTotalMedia(userStats);
+
+      console.log(`📈 Generating report: ${totalMedia} total media, ${topUsers.length} top users`);
 
       // Send main report
       console.log('📊 Generating main report...');
-      const mainEmbed = this.reportGenerator.generateMainReport(topUsers, channelBreakdown, totalAttachments);
+      const mainEmbed = this.reportGenerator.generateMainReport(topUsers, channelBreakdown, totalMedia);
       await reportChannel.send({ 
         content: '@everyone', 
         embeds: [mainEmbed] 
@@ -71,17 +75,23 @@ class Scheduler {
 
       // Send individual user reports
       console.log(`👤 Generating ${userStats.size} individual user reports...`);
+      let userReportCount = 0;
       for (const [userId, userData] of userStats) {
         if (userData.total > 0) {
-          const userEmbed = this.reportGenerator.generateUserEmbed(userId, userData, this.client);
-          await reportChannel.send({ embeds: [userEmbed] });
-          
-          // Small delay to avoid rate limits
-          await new Promise(resolve => setTimeout(resolve, 500));
+          try {
+            const userEmbed = this.reportGenerator.generateUserEmbed(userId, userData, this.client);
+            await reportChannel.send({ embeds: [userEmbed] });
+            userReportCount++;
+            
+            // Small delay to avoid rate limits
+            await new Promise(resolve => setTimeout(resolve, 500));
+          } catch (error) {
+            console.error(`❌ Error sending user report for ${userId}:`, error);
+          }
         }
       }
 
-      console.log(`✅ Report generation complete! Sent ${userStats.size} user reports`);
+      console.log(`✅ Report generation complete! Sent ${userReportCount} user reports`);
 
     } catch (error) {
       console.error('❌ Error generating report:', error);
@@ -89,7 +99,7 @@ class Scheduler {
     }
   }
 
-  // Manual report trigger
+  // Manual report trigger with better error handling
   async generateManualReport(interaction = null) {
     if (this.isRunning) {
       if (interaction) {
@@ -102,21 +112,26 @@ class Scheduler {
     
     try {
       if (interaction) {
-        await interaction.reply('🔄 Generating manual report...');
+        await interaction.deferReply(); // Use deferReply to avoid timeout
       }
 
       console.log('🔄 Starting manual report generation...');
       await this.generateAndSendReport();
 
       if (interaction) {
-        await interaction.editReply('✅ Manual report generated successfully!');
+        await interaction.editReply('✅ Manual report generated successfully! Check the reports channel.');
       }
 
     } catch (error) {
       console.error('❌ Error in manual report generation:', error);
       
       if (interaction) {
-        await interaction.editReply('❌ Error generating report! Check console for details.');
+        const errorMessage = '❌ Error generating report! Check console for details.';
+        if (interaction.replied || interaction.deferred) {
+          await interaction.editReply(errorMessage);
+        } else {
+          await interaction.reply({ content: errorMessage, ephemeral: true });
+        }
       }
     } finally {
       this.isRunning = false;
