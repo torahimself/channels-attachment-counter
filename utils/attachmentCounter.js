@@ -9,7 +9,18 @@ class AttachmentCounter {
   // Check if user has any of the tracked roles
   userHasTrackedRole(member, trackedRoles) {
     if (!member) return false;
-    return member.roles.cache.some(role => trackedRoles.includes(role.id));
+    
+    const hasRole = member.roles.cache.some(role => trackedRoles.includes(role.id));
+    
+    // Debug logging for role checking
+    if (!hasRole && Math.random() < 0.05) { // 5% chance to log for debugging
+      console.log(`🔍 Role check for ${member.user.tag}:`);
+      console.log(`   Tracked roles needed: ${trackedRoles.join(', ')}`);
+      console.log(`   User's role IDs: ${Array.from(member.roles.cache.keys()).join(', ')}`);
+      console.log(`   User's role names: ${member.roles.cache.map(r => r.name).join(', ')}`);
+    }
+    
+    return hasRole;
   }
 
   // Get user's roles for debugging
@@ -123,13 +134,8 @@ class AttachmentCounter {
         if (message.author.bot) continue;
         
         const hasTrackedRole = this.userHasTrackedRole(message.member, trackedRoles);
-        const userRoles = this.getUserRoles(message.member);
         
         if (!hasTrackedRole) {
-          // Only log this occasionally to reduce spam
-          if (Math.random() < 0.1) { // 10% chance to log
-            console.log(`🚫 Skipping message from ${message.author.tag} - No tracked roles`);
-          }
           continue;
         }
 
@@ -143,7 +149,7 @@ class AttachmentCounter {
               username: username,
               total: 0,
               channels: new Map(),
-              roles: userRoles
+              roles: this.getUserRoles(message.member)
             });
           }
 
@@ -169,6 +175,7 @@ class AttachmentCounter {
   // Scan only specified channels (with forum support)
   async scanChannels(channelIds, trackedRoles) {
     console.log(`🔄 Starting attachment scan for ${channelIds.length} channels...`);
+    console.log(`🎯 Tracking users with ANY of these roles: ${trackedRoles.join(', ')}`);
     
     const allUserStats = new Map();
     const sinceDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Last 7 days
