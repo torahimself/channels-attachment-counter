@@ -49,7 +49,7 @@ class Scheduler {
       }
 
       // Check if bot can send messages to report channel
-      const canSend = reportChannel.permissionsFor(this.client.user).has('SendMessages');
+      const canSend = reportChannel.permissionsFor(this.client.user)?.has('SendMessages');
       if (!canSend) {
         console.log('❌ Bot cannot send messages to report channel');
         return;
@@ -63,7 +63,7 @@ class Scheduler {
       if (userStats.size === 0) {
         console.log('ℹ️  No media found from tracked roles this week');
         try {
-          await reportChannel.send('@everyone\n📊 **WEEKLY MEDIA REPORT**\n\nNo media found from tracked roles this week. 📭');
+          await reportChannel.send('📊 **WEEKLY MEDIA REPORT**\n\nNo media found from tracked roles this week. 📭');
         } catch (error) {
           console.error('❌ Cannot send to report channel:', error.message);
         }
@@ -81,7 +81,7 @@ class Scheduler {
       const mainEmbed = this.reportGenerator.generateMainReport(topUsers, channelBreakdown, totalMedia);
       try {
         await reportChannel.send({ 
-          content: '@everyone', 
+          content: '📊 **WEEKLY MEDIA REPORT**', 
           embeds: [mainEmbed] 
         });
       } catch (error) {
@@ -115,11 +115,10 @@ class Scheduler {
     }
   }
 
-  // Manual report trigger with FIXED interaction handling
+  // Manual report trigger
   async generateManualReport(interaction = null) {
     if (this.isRunning) {
       if (interaction) {
-        // Use editReply since we already deferred
         await interaction.editReply('⚠️ Report generation is already in progress!');
       }
       return;
@@ -129,7 +128,6 @@ class Scheduler {
     
     try {
       if (interaction) {
-        // Update the deferred reply instead of creating a new one
         await interaction.editReply('🔄 Generating manual report... This may take a few minutes.');
       }
 
@@ -145,7 +143,6 @@ class Scheduler {
       
       if (interaction) {
         const errorMessage = '❌ Error generating report! Check console for details.';
-        // Use editReply since we already deferred
         await interaction.editReply(errorMessage);
       }
     } finally {
