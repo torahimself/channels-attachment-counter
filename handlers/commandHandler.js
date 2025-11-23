@@ -14,34 +14,42 @@ function loadCommands() {
     }
 
     const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+    console.log(`📁 Found command files: ${commandFiles.join(', ')}`);
 
     for (const file of commandFiles) {
       try {
         const commandPath = path.join(commandsPath, file);
+        console.log(`🔧 Loading command from: ${file}`);
+        
         const command = require(commandPath);
         
         if (command.data && typeof command.data.name === 'string') {
           commands.set(command.data.name, command);
-          console.log(`✅ Loaded command: ${command.data.name}`);
+          console.log(`✅ Loaded command: ${command.data.name} from ${file}`);
         } else {
-          console.log(`❌ Invalid command structure in ${file}`);
+          console.log(`❌ Invalid command structure in ${file}:`, command);
         }
       } catch (error) {
         console.error(`❌ Error loading command ${file}:`, error.message);
       }
     }
 
-    console.log(`✅ Loaded ${commands.size} commands`);
+    console.log(`✅ Loaded ${commands.size} commands: ${Array.from(commands.keys()).join(', ')}`);
   } catch (error) {
     console.error('❌ Error loading commands:', error);
   }
 }
 
 function getCommands() {
-  return Array.from(commands.values()).map(cmd => cmd.data.toJSON());
+  const commandList = Array.from(commands.values()).map(cmd => cmd.data.toJSON());
+  console.log(`📋 Registering commands: ${commandList.map(cmd => cmd.name).join(', ')}`);
+  return commandList;
 }
 
 function executeCommand(interaction, scheduler) {
+  console.log(`🔧 Looking for command: ${interaction.commandName}`);
+  console.log(`📝 Available commands: ${Array.from(commands.keys()).join(', ')}`);
+  
   const command = commands.get(interaction.commandName);
   if (!command) {
     console.log(`❌ Command not found: ${interaction.commandName}`);
