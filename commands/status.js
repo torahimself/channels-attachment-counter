@@ -14,10 +14,7 @@ module.exports = {
     const hasAllowedRole = member.roles.cache.has(ALLOWED_ROLE_ID);
     
     if (!hasAllowedRole) {
-      await interaction.reply({ 
-        content: '❌ You do not have permission to use this command!', 
-        flags: 64 // ephemeral
-      });
+      await interaction.editReply('❌ You do not have permission to use this command!');
       return;
     }
 
@@ -74,9 +71,6 @@ module.exports = {
       }
     };
 
-    await interaction.reply({ 
-      embeds: [statusEmbed], 
-      flags: 64 // ephemeral
-    });
+    await interaction.editReply({ embeds: [statusEmbed] });
   },
 };
