@@ -20,7 +20,7 @@ module.exports = {
       console.log(`🚫 User ${interaction.user.tag} does not have permission for /stats`);
       await interaction.reply({ 
         content: '❌ You do not have permission to use this command!', 
-        ephemeral: true 
+        flags: 64 // ephemeral
       });
       return;
     }
@@ -30,8 +30,8 @@ module.exports = {
     if (!scheduler) {
       console.log('❌ Scheduler not available for /stats command');
       await interaction.reply({ 
-        content: '❌ Scheduler not available yet. Please try again in a moment.', 
-        ephemeral: true 
+        content: '❌ Bot is still initializing. Please wait a moment and try again.', 
+        flags: 64 // ephemeral
       });
       return;
     }
