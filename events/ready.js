@@ -13,11 +13,17 @@ module.exports = {
     console.log(`✅ Bot logged in as ${client.user.tag}!`);
 
     // Initialize core systems
+    console.log('🔄 Initializing attachment counter...');
     const attachmentCounter = new AttachmentCounter(client);
+    
+    console.log('🔄 Initializing report generator...');
     const reportGenerator = new ReportGenerator(client);
+    
+    console.log('🔄 Initializing scheduler...');
     const scheduler = new Scheduler(client, attachmentCounter, reportGenerator);
 
     // Share scheduler with interaction handler
+    console.log('🔄 Setting scheduler in interaction handler...');
     interactionHandler.setScheduler(scheduler);
 
     // Register slash commands
@@ -44,6 +50,7 @@ module.exports = {
     }
 
     // Start the weekly scheduler
+    console.log('🔄 Starting weekly scheduler...');
     scheduler.scheduleWeeklyReport();
     console.log('⏰ Weekly report scheduler started!');
 
