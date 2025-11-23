@@ -21,6 +21,9 @@ function loadEvents(client) {
         const eventPath = path.join(eventsPath, file);
         console.log(`🔧 Loading event from: ${file}`);
         
+        // Clear the require cache to ensure fresh load
+        delete require.cache[require.resolve(eventPath)];
+        
         const event = require(eventPath);
         
         if (!event.name || !event.execute) {
@@ -38,6 +41,7 @@ function loadEvents(client) {
         loadedCount++;
       } catch (error) {
         console.error(`❌ Error loading event ${file}:`, error.message);
+        console.error(`Full error:`, error);
       }
     }
 
