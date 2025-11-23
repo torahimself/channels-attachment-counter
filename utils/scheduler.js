@@ -99,7 +99,7 @@ class Scheduler {
     }
   }
 
-  // Manual report trigger with better error handling
+  // Manual report trigger with FIXED interaction handling
   async generateManualReport(interaction = null) {
     if (this.isRunning) {
       if (interaction) {
