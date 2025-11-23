@@ -12,6 +12,15 @@ class AttachmentCounter {
     return member.roles.cache.some(role => trackedRoles.includes(role.id));
   }
 
+  // Get user's roles for debugging
+  getUserRoles(member) {
+    if (!member) return [];
+    return member.roles.cache.map(role => ({
+      id: role.id,
+      name: role.name
+    }));
+  }
+
   // Scan forum threads (special handling for forums)
   async scanForumChannel(forumChannel, trackedRoles, sinceDate) {
     console.log(`🏛️  Scanning forum: ${forumChannel.name} (${forumChannel.id})`);
@@ -44,7 +53,8 @@ class AttachmentCounter {
             userStats.set(userId, {
               username: userData.username,
               total: 0,
-              channels: new Map()
+              channels: new Map(),
+              roles: userData.roles // Store user roles
             });
           }
 
@@ -69,7 +79,7 @@ class AttachmentCounter {
     return userStats;
   }
 
-  // Optimized channel scanning with limits
+  // Optimized channel scanning with proper limit (100 max)
   async scanChannel(channel, trackedRoles, sinceDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)) {
     console.log(`🔍 Scanning ${channel.type === 15 ? 'forum thread' : 'channel'}: ${channel.name} (${channel.id})`);
     
@@ -78,8 +88,8 @@ class AttachmentCounter {
     let attachmentCount = 0;
 
     try {
-      // Only fetch last 200 messages maximum per channel (reduced from 500)
-      const messages = await channel.messages.fetch({ limit: 200 });
+      // Use proper limit (100 is Discord's maximum)
+      const messages = await channel.messages.fetch({ limit: 100 });
       console.log(`📨 Found ${messages.size} messages in ${channel.name}`);
 
       for (const [messageId, message] of messages) {
@@ -90,7 +100,14 @@ class AttachmentCounter {
 
         // Only count messages from users with tracked roles
         if (message.author.bot) continue;
-        if (!this.userHasTrackedRole(message.member, trackedRoles)) continue;
+        
+        const hasTrackedRole = this.userHasTrackedRole(message.member, trackedRoles);
+        const userRoles = this.getUserRoles(message.member);
+        
+        if (!hasTrackedRole) {
+          console.log(`🚫 Skipping message from ${message.author.tag} - No tracked roles. User roles:`, userRoles.map(r => r.name));
+          continue;
+        }
 
         const attachments = message.attachments.size;
         if (attachments > 0) {
@@ -101,7 +118,8 @@ class AttachmentCounter {
             userStats.set(userId, {
               username: username,
               total: 0,
-              channels: new Map()
+              channels: new Map(),
+              roles: userRoles // Store user roles for debugging
             });
           }
 
@@ -110,6 +128,7 @@ class AttachmentCounter {
           userData.channels.set(channel.id, (userData.channels.get(channel.id) || 0) + attachments);
 
           attachmentCount += attachments;
+          console.log(`📎 Found ${attachments} attachments from ${username} in ${channel.name}`);
         }
 
         messageCount++;
@@ -155,7 +174,8 @@ class AttachmentCounter {
           allUserStats.set(userId, {
             username: userData.username,
             total: 0,
-            channels: new Map()
+            channels: new Map(),
+            roles: userData.roles
           });
         }
 
@@ -173,6 +193,12 @@ class AttachmentCounter {
     }
 
     console.log(`🎯 Scan complete. Found ${allUserStats.size} users with attachments`);
+    
+    // Log user roles for debugging
+    for (const [userId, userData] of allUserStats) {
+      console.log(`👤 ${userData.username} (${userId}) - ${userData.total} attachments - Roles:`, userData.roles.map(r => r.name));
+    }
+    
     return allUserStats;
   }
 
@@ -213,7 +239,8 @@ class AttachmentCounter {
         userId,
         username: data.username,
         total: data.total,
-        channelCount: data.channels.size
+        channelCount: data.channels.size,
+        roles: data.roles // Include roles in output
       }))
       .sort((a, b) => b.total - a.total)
       .slice(0, limit);
