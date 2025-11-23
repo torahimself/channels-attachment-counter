@@ -12,6 +12,7 @@ class Scheduler {
   // Schedule the weekly report
   scheduleWeeklyReport() {
     console.log(`⏰ Scheduling weekly reports: ${config.schedule} (Friday 2:00 PM Riyadh Time)`);
+    console.log(`📁 Scanning ${config.channels.length} specified channels`);
     
     const task = cron.schedule(config.schedule, async () => {
       if (this.isRunning) {
@@ -48,7 +49,7 @@ class Scheduler {
       }
 
       console.log('🔍 Scanning for attachments...');
-      const userStats = await this.attachmentCounter.scanAllChannels(config.categories, config.trackedRoles);
+      const userStats = await this.attachmentCounter.scanChannels(config.channels, config.trackedRoles);
       
       if (userStats.size === 0) {
         console.log('ℹ️  No attachments found from tracked roles this week');
@@ -57,12 +58,12 @@ class Scheduler {
       }
 
       const topUsers = this.attachmentCounter.getTopUsers(userStats, 5);
-      const categoryBreakdown = this.attachmentCounter.getCategoryBreakdown(userStats, config.categories);
+      const channelBreakdown = this.attachmentCounter.getChannelBreakdown(userStats, config.channels);
       const totalAttachments = this.reportGenerator.calculateTotalAttachments(userStats);
 
       // Send main report
       console.log('📊 Generating main report...');
-      const mainEmbed = this.reportGenerator.generateMainReport(topUsers, categoryBreakdown, totalAttachments);
+      const mainEmbed = this.reportGenerator.generateMainReport(topUsers, channelBreakdown, totalAttachments);
       await reportChannel.send({ 
         content: '@everyone', 
         embeds: [mainEmbed] 
