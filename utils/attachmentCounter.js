@@ -61,6 +61,122 @@ class AttachmentCounter {
     return count;
   }
 
+  // Scan ALL messages in a channel from sinceDate (with pagination)
+  async scanAllChannelMessages(channel, trackedRoles, sinceDate) {
+    console.log(`🔍 Scanning ALL messages in ${channel.name} since ${sinceDate.toLocaleString()}`);
+    
+    const userStats = new Map();
+    let totalMessages = 0;
+    let totalMedia = 0;
+    let lastMessageId = null;
+    let hasMoreMessages = true;
+    let batchCount = 0;
+
+    try {
+      while (hasMoreMessages) {
+        batchCount++;
+        const options = { limit: 100 };
+        if (lastMessageId) {
+          options.before = lastMessageId;
+        }
+
+        const messages = await channel.messages.fetch(options);
+        console.log(`📦 Batch ${batchCount}: Found ${messages.size} messages in ${channel.name}`);
+
+        if (messages.size === 0) {
+          hasMoreMessages = false;
+          break;
+        }
+
+        let batchOlderThanRange = false;
+
+        for (const [messageId, message] of messages) {
+          // Stop if we've reached messages older than our date range
+          if (message.createdAt < sinceDate) {
+            batchOlderThanRange = true;
+            break;
+          }
+
+          // Only count messages from users with tracked roles
+          if (message.author.bot) continue;
+          
+          // Ensure we have member data
+          let member = message.member;
+          if (!member && message.guild) {
+            try {
+              member = await message.guild.members.fetch(message.author.id);
+            } catch (error) {
+              console.log(`❌ Could not fetch member data for ${message.author.tag}:`, error.message);
+              continue;
+            }
+          }
+
+          if (!member) {
+            console.log(`❌ No member data for ${message.author.tag}, skipping`);
+            continue;
+          }
+          
+          const hasTrackedRole = this.userHasTrackedRole(member, trackedRoles);
+          
+          if (!hasTrackedRole) {
+            continue;
+          }
+
+          const mediaItems = this.countMessageMedia(message);
+          if (mediaItems > 0) {
+            const userId = message.author.id;
+            const username = message.author.tag;
+
+            if (!userStats.has(userId)) {
+              userStats.set(userId, {
+                username: username,
+                total: 0,
+                channels: new Map(),
+                roles: this.getUserRoles(member)
+              });
+            }
+
+            const userData = userStats.get(userId);
+            userData.total += mediaItems;
+            userData.channels.set(channel.id, (userData.channels.get(channel.id) || 0) + mediaItems);
+
+            totalMedia += mediaItems;
+            
+            // Only log every 10th media item to reduce spam
+            if (totalMedia % 10 === 0) {
+              console.log(`📎 Found ${mediaItems} media items from ${username} in ${channel.name} (Total: ${totalMedia})`);
+            }
+          }
+
+          totalMessages++;
+          lastMessageId = messageId;
+        }
+
+        // If this batch contained messages older than our range, we're done
+        if (batchOlderThanRange) {
+          console.log(`⏰ Reached messages older than scan range in ${channel.name}`);
+          hasMoreMessages = false;
+          break;
+        }
+
+        // Small delay between batches to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Safety limit: don't scan more than 2000 messages per channel
+        if (totalMessages >= 2000) {
+          console.log(`⚠️  Safety limit reached: scanned ${totalMessages} messages in ${channel.name}`);
+          break;
+        }
+      }
+
+    } catch (error) {
+      console.error(`❌ Error scanning channel ${channel.name}:`, error.message);
+    }
+
+    console.log(`✅ Scanned ${totalMessages} total messages in ${channel.name}, found ${totalMedia} media items in ${batchCount} batches`);
+    return userStats;
+  }
+
   // Scan forum threads (special handling for forums)
   async scanForumChannel(forumChannel, trackedRoles, sinceDate) {
     console.log(`🏛️  Scanning forum: ${forumChannel.name} (${forumChannel.id})`);
@@ -85,7 +201,8 @@ class AttachmentCounter {
         if (thread.createdAt < sinceDate) continue;
         
         totalThreads++;
-        const threadStats = await this.scanChannel(thread, trackedRoles, sinceDate);
+        console.log(`📖 Scanning thread: ${thread.name}`);
+        const threadStats = await this.scanAllChannelMessages(thread, trackedRoles, sinceDate);
         
         // Merge thread stats into forum stats
         for (const [userId, userData] of threadStats) {
@@ -108,7 +225,7 @@ class AttachmentCounter {
         }
 
         // Delay between threads
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
     } catch (error) {
@@ -119,112 +236,43 @@ class AttachmentCounter {
     return userStats;
   }
 
-  // Optimized channel scanning with proper limit (100 max)
+  // Optimized channel scanning with pagination
   async scanChannel(channel, trackedRoles, sinceDate) {
     console.log(`🔍 Scanning ${channel.type === 15 ? 'forum thread' : 'channel'}: ${channel.name} (${channel.id})`);
-    console.log(`📅 Scanning messages since: ${sinceDate.toLocaleString()}`);
+    console.log(`📅 Scanning ALL messages since: ${sinceDate.toLocaleString()}`);
     
-    const userStats = new Map();
-    let messageCount = 0;
-    let mediaCount = 0;
-
-    try {
-      // Use proper limit (100 is Discord's maximum)
-      const messages = await channel.messages.fetch({ limit: 100 });
-      console.log(`📨 Found ${messages.size} messages in ${channel.name}`);
-
-      for (const [messageId, message] of messages) {
-        // Stop if we've reached messages older than our date range
-        if (message.createdAt < sinceDate) {
-          console.log(`⏰ Reached messages older than scan range in ${channel.name}`);
-          break;
-        }
-
-        // Only count messages from users with tracked roles
-        if (message.author.bot) continue;
-        
-        // Ensure we have member data
-        let member = message.member;
-        if (!member && message.guild) {
-          try {
-            member = await message.guild.members.fetch(message.author.id);
-            console.log(`🔍 Fetched member data for ${message.author.tag}`);
-          } catch (error) {
-            console.log(`❌ Could not fetch member data for ${message.author.tag}:`, error.message);
-            continue;
-          }
-        }
-
-        if (!member) {
-          console.log(`❌ No member data for ${message.author.tag}, skipping`);
-          continue;
-        }
-        
-        const hasTrackedRole = this.userHasTrackedRole(member, trackedRoles);
-        
-        if (!hasTrackedRole) {
-          continue;
-        }
-
-        const mediaItems = this.countMessageMedia(message);
-        if (mediaItems > 0) {
-          const userId = message.author.id;
-          const username = message.author.tag;
-
-          if (!userStats.has(userId)) {
-            userStats.set(userId, {
-              username: username,
-              total: 0,
-              channels: new Map(),
-              roles: this.getUserRoles(member)
-            });
-          }
-
-          const userData = userStats.get(userId);
-          userData.total += mediaItems;
-          userData.channels.set(channel.id, (userData.channels.get(channel.id) || 0) + mediaItems);
-
-          mediaCount += mediaItems;
-          console.log(`📎 Found ${mediaItems} media items from ${username} in ${channel.name}`);
-        }
-
-        messageCount++;
-      }
-
-    } catch (error) {
-      console.error(`❌ Error scanning channel ${channel.name}:`, error.message);
+    // Handle forum channels differently
+    if (channel.type === 15) { // 15 = GUILD_FORUM
+      return await this.scanForumChannel(channel, trackedRoles, sinceDate);
+    } else if (channel.isTextBased()) {
+      return await this.scanAllChannelMessages(channel, trackedRoles, sinceDate);
+    } else {
+      console.log(`❌ Channel is not text-based: ${channel.name} (type: ${channel.type})`);
+      return new Map();
     }
-
-    console.log(`✅ Scanned ${messageCount} messages in ${channel.name}, found ${mediaCount} media items`);
-    return userStats;
   }
 
   // Scan only specified channels (with forum support)
   async scanChannels(channelIds, trackedRoles) {
-    console.log(`🔄 Starting attachment scan for ${channelIds.length} channels...`);
+    console.log(`🔄 Starting COMPLETE attachment scan for ${channelIds.length} channels...`);
     console.log(`🎯 Tracking users with ANY of these roles: ${trackedRoles.join(', ')}`);
     
     const allUserStats = new Map();
     const sinceDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Last 7 days
+    let totalChannelsScanned = 0;
 
     for (const channelId of channelIds) {
+      totalChannelsScanned++;
+      console.log(`\n📊 Progress: ${totalChannelsScanned}/${channelIds.length} channels`);
+      
       const channel = this.client.channels.cache.get(channelId);
       if (!channel) {
         console.log(`❌ Channel not found: ${channelId}`);
         continue;
       }
 
-      let channelStats;
-
-      // Handle forum channels differently
-      if (channel.type === 15) { // 15 = GUILD_FORUM
-        channelStats = await this.scanForumChannel(channel, trackedRoles, sinceDate);
-      } else if (channel.isTextBased()) {
-        channelStats = await this.scanChannel(channel, trackedRoles, sinceDate);
-      } else {
-        console.log(`❌ Channel is not text-based: ${channel.name} (type: ${channel.type})`);
-        continue;
-      }
+      console.log(`🔍 Scanning channel ${totalChannelsScanned}/${channelIds.length}: ${channel.name}`);
+      const channelStats = await this.scanChannel(channel, trackedRoles, sinceDate);
 
       // Merge channel stats into overall stats
       for (const [userId, userData] of channelStats) {
@@ -246,16 +294,26 @@ class AttachmentCounter {
         }
       }
 
+      // Progress update
+      const currentTotal = Array.from(allUserStats.values()).reduce((sum, user) => sum + user.total, 0);
+      console.log(`📈 Running total: ${currentTotal} media items from ${allUserStats.size} users`);
+
       // Small delay to avoid rate limits
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
     }
 
-    console.log(`🎯 Scan complete. Found ${allUserStats.size} users with media items`);
+    console.log(`\n🎯 COMPLETE SCAN FINISHED!`);
+    console.log(`📊 Scanned ${totalChannelsScanned} channels`);
+    console.log(`👤 Found ${allUserStats.size} users with media items`);
     
-    // Log user roles for debugging
+    // Log user totals
+    let grandTotal = 0;
     for (const [userId, userData] of allUserStats) {
-      console.log(`👤 ${userData.username} (${userId}) - ${userData.total} media items - Roles:`, userData.roles.map(r => r.name));
+      console.log(`👤 ${userData.username} (${userId}) - ${userData.total} media items`);
+      grandTotal += userData.total;
     }
+    
+    console.log(`🏆 GRAND TOTAL: ${grandTotal} media items found`);
     
     return allUserStats;
   }
