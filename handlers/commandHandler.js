@@ -16,10 +16,16 @@ function loadCommands() {
     const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
     console.log(`📁 Found command files: ${commandFiles.join(', ')}`);
 
+    // Clear existing commands
+    commands.clear();
+
     for (const file of commandFiles) {
       try {
         const commandPath = path.join(commandsPath, file);
         console.log(`🔧 Loading command from: ${file}`);
+        
+        // Clear cache before requiring
+        delete require.cache[require.resolve(commandPath)];
         
         const command = require(commandPath);
         
@@ -31,6 +37,7 @@ function loadCommands() {
         }
       } catch (error) {
         console.error(`❌ Error loading command ${file}:`, error.message);
+        console.error(`🔍 Full error:`, error);
       }
     }
 
