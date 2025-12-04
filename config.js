@@ -40,11 +40,13 @@ module.exports = {
     "1357281801940369418"
   ],
   
-  // Report channel where weekly reports are sent
+  // Report channels
   reportChannel: "1435870655508774972",
+  monthlyReportChannel: "1435870655508774972", // Same or different channel
   
-  // Schedule (Friday 2:00 PM Riyadh time = 11:00 AM UTC)
-  schedule: "0 11 * * 5",
+  // Schedules (Friday 2:00 PM Riyadh time = 11:00 AM UTC)
+  weeklySchedule: "0 11 * * 5",
+  monthlySchedule: "0 11 1 * *", // 1st day of month at 11:00 AM UTC
   
   // Timezone for reporting
   timezone: "Asia/Riyadh"
