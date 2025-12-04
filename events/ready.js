@@ -5,13 +5,16 @@ const AttachmentCounter = require('../utils/attachmentCounter');
 const ReportGenerator = require('../utils/reportGenerator');
 const Scheduler = require('../utils/scheduler');
 const interactionHandler = require('./interactionCreate');
-const path = require('path');
+
+// Global reference to store scheduler before ready event
+let globalSchedulerInstance = null;
 
 module.exports = {
   name: 'ready',
   once: true,
   async execute(client) {
     console.log(`🎉 READY EVENT FIRED! Bot logged in as ${client.user.tag}!`);
+    console.log(`📊 Client properties: ${Object.keys(client).join(', ')}`);
 
     try {
       // Initialize core systems
@@ -24,34 +27,23 @@ module.exports = {
       console.log('🔄 Initializing scheduler...');
       const scheduler = new Scheduler(client, attachmentCounter, reportGenerator);
       
-      // Store scheduler on client for global access
+      // Store in global variable
+      globalSchedulerInstance = scheduler;
+      
+      // Store on client for direct access
       client.scheduler = scheduler;
       console.log('✅ Scheduler attached to client object');
+      console.log(`🔍 Client.scheduler is now: ${client.scheduler ? 'SET' : 'NOT SET'}`);
 
       // Share scheduler with interaction handler
       console.log('🔄 Setting scheduler in interaction handler...');
       interactionHandler.setScheduler(scheduler);
       console.log('✅ Scheduler initialized and set in interaction handler!');
 
-      // Refresh command cache to ensure commands have latest scheduler reference
-      console.log('🔄 Refreshing command cache...');
-      const commandsPath = path.join(__dirname, '../commands');
-      const commandFiles = ['stats.js', 'statsm.js', 'status.js'];
-      
-      for (const file of commandFiles) {
-        try {
-          const commandPath = path.join(commandsPath, file);
-          delete require.cache[require.resolve(commandPath)];
-          console.log(`✅ Cleared cache for: ${file}`);
-        } catch (error) {
-          console.log(`⚠️ Could not clear cache for ${file}:`, error.message);
-        }
-      }
-
-      // Reload commands after clearing cache
+      // Initialize commands AFTER scheduler is ready
+      console.log('🔄 Initializing commands...');
       commandHandler.loadCommands();
-      console.log('✅ Commands reloaded with scheduler reference');
-
+      
       // Register slash commands
       console.log('🔄 Registering slash commands...');
       const rest = new REST({ version: '10' }).setToken(config.botToken);
@@ -96,3 +88,6 @@ module.exports = {
     }
   }
 };
+
+// Export getter for global scheduler
+module.exports.getGlobalScheduler = () => globalSchedulerInstance;
