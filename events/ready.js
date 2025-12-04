@@ -46,11 +46,11 @@ module.exports = {
         console.log(`✅ Successfully registered ${data.length} application commands!`);
       }
 
-      // Start the weekly scheduler
-      console.log('🔄 Starting weekly scheduler...');
+      // Start both weekly and monthly schedulers
+      console.log('🔄 Starting schedulers...');
       scheduler.scheduleWeeklyReport();
-      console.log('⏰ Weekly report scheduler started!');
-
+      console.log('⏰ Weekly and Monthly report schedulers started!');
+      
       // Calculate next report time
       const now = new Date();
       const nextFriday = new Date();
