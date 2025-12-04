@@ -6,12 +6,18 @@ class ReportGenerator {
   }
 
   // Generate main report embed with better formatting
-  generateMainReport(topUsers, channelBreakdown, totalMedia) {
+  generateMainReport(topUsers, channelBreakdown, totalMedia, reportType = 'weekly') {
+    const isMonthly = reportType === 'monthly';
+    const title = isMonthly ? '📅 MONTHLY MEDIA REPORT' : '📊 WEEKLY MEDIA REPORT';
+    const color = isMonthly ? 0x9B59B6 : 0x00AE86;
+    const period = isMonthly ? 'Last 30 Days' : 'Last 7 Days';
+    const nextReport = isMonthly ? '1st of next month\n2:00 PM Riyadh Time' : 'Friday 2:00 PM\nRiyadh Time';
+    
     const embed = new EmbedBuilder()
-      .setTitle('📊 WEEKLY MEDIA REPORT')
-      .setColor(0x00AE86)
+      .setTitle(title)
+      .setColor(color)
       .setTimestamp()
-      .setFooter({ text: 'Weekly Media Counter • Report generated' });
+      .setFooter({ text: `${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Media Counter • Report generated` });
 
     // Top Contributors field with mentions
     if (topUsers.length > 0) {
@@ -21,7 +27,7 @@ class ReportGenerator {
       
       embed.addFields({
         name: '🏆 TOP CONTRIBUTORS',
-        value: topUsersText || 'No media found this week',
+        value: topUsersText || 'No media found this period',
         inline: false
       });
     }
@@ -55,13 +61,13 @@ class ReportGenerator {
         inline: true
       },
       {
-        name: '🕒 NEXT REPORT',
-        value: `Friday 2:00 PM\nRiyadh Time`,
+        name: '⏰ NEXT REPORT',
+        value: nextReport,
         inline: true
       },
       {
-        name: '📊 SCOPE',
-        value: `Last 7 Days\n50 Channels + 4 Forums`,
+        name: '📅 PERIOD',
+        value: `${period}\n50 Channels + 4 Forums`,
         inline: true
       }
     );
@@ -70,15 +76,19 @@ class ReportGenerator {
   }
 
   // Generate individual user embed with user mention
-  generateUserEmbed(userId, userData, client) {
+  generateUserEmbed(userId, userData, client, reportType = 'weekly') {
+    const isMonthly = reportType === 'monthly';
+    const title = isMonthly ? '👤 MONTHLY USER REPORT' : '👤 USER MEDIA REPORT';
+    const color = isMonthly ? 0x8E44AD : 0x0099FF;
+    
     const user = client.users.cache.get(userId);
     const username = user ? user.tag : userData.username;
 
     const embed = new EmbedBuilder()
-      .setTitle(`👤 USER MEDIA REPORT`)
-      .setColor(0x0099FF)
+      .setTitle(title)
+      .setColor(color)
       .setTimestamp()
-      .setFooter({ text: 'Individual User Report • Click user mention to profile' });
+      .setFooter({ text: `${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Individual Report • Click user mention to profile` });
 
     // User info with mention
     embed.addFields({
@@ -90,7 +100,7 @@ class ReportGenerator {
     // Total media
     embed.addFields({
       name: '📊 TOTAL MEDIA',
-      value: `**${userData.total}** media items this week\n*(attachments + embed links)*`,
+      value: `**${userData.total}** media items this ${reportType}\n*(attachments + embed links)*`,
       inline: false
     });
 
@@ -144,12 +154,26 @@ class ReportGenerator {
     }
 
     // Activity period
-    const startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const endDate = new Date();
+    const now = new Date();
+    let startDate;
+    
+    if (isMonthly) {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else {
+      startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    }
+    
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    const periodText = isMonthly 
+      ? `${monthNames[startDate.getMonth()]} ${startDate.getFullYear()}`
+      : `<t:${Math.floor(startDate.getTime() / 1000)}:D> to <t:${Math.floor(now.getTime() / 1000)}:D>`;
     
     embed.addFields({
       name: '📅 REPORT PERIOD',
-      value: `<t:${Math.floor(startDate.getTime() / 1000)}:D> to <t:${Math.floor(endDate.getTime() / 1000)}:D>`,
+      value: periodText,
       inline: true
     });
 
