@@ -34,19 +34,18 @@ module.exports = {
     }
 
     try {
-      // Execute the command with scheduler if available
-      if (globalScheduler) {
-        console.log(`✅ Executing ${interaction.commandName} with scheduler`);
-        await command.execute(interaction, globalScheduler);
-      } else {
-        console.log(`⚠️ Executing ${interaction.commandName} without scheduler`);
-        await command.execute(interaction);
-      }
+      // Always pass both scheduler and client's scheduler as fallback
+      console.log(`✅ Executing ${interaction.commandName} with scheduler`);
+      console.log(`🔍 Global scheduler available:`, globalScheduler ? 'YES' : 'NO');
+      console.log(`🔍 Client scheduler available:`, interaction.client.scheduler ? 'YES' : 'NO');
+      
+      await command.execute(interaction, globalScheduler);
       
       console.log(`✅ Command executed: ${interaction.commandName}`);
       
     } catch (error) {
       console.error(`❌ Error executing command ${interaction.commandName}:`, error);
+      console.error(`🔍 Full error stack:`, error.stack);
       await interaction.editReply('❌ There was an error executing this command!');
     }
   },
