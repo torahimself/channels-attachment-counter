@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 // Role ID that can use commands
 const ALLOWED_ROLE_ID = "1438249316559884499";
@@ -6,45 +6,32 @@ const ALLOWED_ROLE_ID = "1438249316559884499";
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('statsm')
-    .setDescription('Check monthly media statistics (Placeholder)'),
+    .setDescription('Generate monthly media report')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   
-  async execute(interaction) {
+  async execute(interaction, scheduler = null) {
+    console.log(`🔧 /statsm command received from ${interaction.user.tag}`);
+    
     // Check if user has the allowed role
     const member = interaction.member;
     const hasAllowedRole = member.roles.cache.has(ALLOWED_ROLE_ID);
     
     if (!hasAllowedRole) {
+      console.log(`🚫 User ${interaction.user.tag} does not have permission for /statsm`);
       await interaction.editReply('❌ You do not have permission to use this command!');
       return;
     }
 
-    const statusEmbed = {
-      title: "📅 MONTHLY MEDIA STATISTICS",
-      color: 0x9B59B6,
-      description: "**Currently tracking last 7 days only**\n\nMonthly statistics feature is in development and requires database storage for historical data tracking.",
-      fields: [
-        {
-          name: "📊 CURRENT SYSTEM",
-          value: "• Last 7 days scanning\n• 50 channels + 4 forums\n• Media: Attachments + Embeds\n• Weekly automated reports",
-          inline: false
-        },
-        {
-          name: "🔄 MANUAL REPORT",
-          value: "Use `/stats` for current week",
-          inline: true
-        },
-        {
-          name: "📈 STATUS",
-          value: "Use `/status` for bot info",
-          inline: true
-        }
-      ],
-      timestamp: new Date().toISOString(),
-      footer: {
-        text: "Monthly tracking coming in future update"
-      }
-    };
+    console.log(`✅ User ${interaction.user.tag} has permission, proceeding with /statsm`);
 
-    await interaction.editReply({ embeds: [statusEmbed] });
+    // Check if scheduler is available
+    if (!scheduler) {
+      console.log('❌ Scheduler not available for /statsm command');
+      await interaction.editReply('❌ Scheduler is not available. The bot may still be initializing or there was an error.');
+      return;
+    }
+    
+    console.log('🔄 Starting manual monthly report via /statsm command');
+    await scheduler.generateManualMonthlyReport(interaction);
   },
 };
