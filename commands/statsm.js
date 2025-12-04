@@ -23,30 +23,26 @@ module.exports = {
     }
 
     console.log(`✅ User ${interaction.user.tag} has permission, proceeding with /statsm`);
-
-    // Try to get scheduler from parameter first, then from client
-    let activeScheduler = scheduler;
     
-    // If scheduler parameter is null, try to get it from client
-    if (!activeScheduler && interaction.client.scheduler) {
-      activeScheduler = interaction.client.scheduler;
-      console.log(`✅ Retrieved scheduler from client object`);
-    }
-    
-    // Debug: Check what scheduler looks like
-    console.log(`🔍 Scheduler object:`, activeScheduler ? 'Exists' : 'NULL');
-    console.log(`🔍 Scheduler type:`, typeof activeScheduler);
-    
-    if (!activeScheduler) {
-      console.log('❌ Scheduler not available for /statsm command');
-      console.log(`🔍 Client object has scheduler:`, interaction.client.scheduler ? 'YES' : 'NO');
-      console.log(`🔍 Client properties:`, Object.keys(interaction.client).slice(0, 10));
+    // The scheduler should now be provided by interactionCreate.js
+    // If it's still null, we'll handle it here
+    if (!scheduler) {
+      console.log('❌ Scheduler parameter is NULL in statsm command');
+      console.log(`🔍 Checking client.scheduler:`, interaction.client.scheduler ? 'EXISTS' : 'NULL');
       
-      await interaction.editReply('❌ Scheduler is not available. The bot may still be initializing or there was an error.');
+      await interaction.editReply('❌ Scheduler is not available. The bot may still be initializing. Please wait 10 seconds and try again, or restart the bot.');
       return;
     }
     
     console.log('🔄 Starting manual monthly report via /statsm command');
-    await activeScheduler.generateManualMonthlyReport(interaction);
+    console.log(`🔍 Scheduler type: ${scheduler.constructor.name}`);
+    
+    try {
+      await scheduler.generateManualMonthlyReport(interaction);
+    } catch (error) {
+      console.error(`❌ Error in generateManualMonthlyReport:`, error.message);
+      console.error(`🔍 Error stack:`, error.stack);
+      await interaction.editReply('❌ Failed to generate monthly report. Check bot logs for details.');
+    }
   },
 };
