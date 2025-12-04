@@ -40,6 +40,11 @@ module.exports = {
           inline: true
         },
         {
+          name: "📅 Next Monthly Report",
+          value: "1st of next month 2:00 PM Riyadh Time",
+          inline: true
+        },
+        {
           name: "📊 Next Report",
           value: `<t:${Math.floor(nextFriday.getTime() / 1000)}:F>`,
           inline: true
