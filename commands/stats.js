@@ -24,17 +24,28 @@ module.exports = {
 
     console.log(`✅ User ${interaction.user.tag} has permission, proceeding with /stats`);
 
-    // Debug: Check what scheduler looks like
-    console.log(`🔍 Scheduler object:`, scheduler ? 'Exists' : 'NULL');
-    console.log(`🔍 Scheduler type:`, typeof scheduler);
+    // Try to get scheduler from parameter first, then from client
+    let activeScheduler = scheduler;
     
-    if (!scheduler) {
+    // If scheduler parameter is null, try to get it from client
+    if (!activeScheduler && interaction.client.scheduler) {
+      activeScheduler = interaction.client.scheduler;
+      console.log(`✅ Retrieved scheduler from client object`);
+    }
+    
+    // Debug: Check what scheduler looks like
+    console.log(`🔍 Scheduler object:`, activeScheduler ? 'Exists' : 'NULL');
+    console.log(`🔍 Scheduler type:`, typeof activeScheduler);
+    
+    if (!activeScheduler) {
       console.log('❌ Scheduler not available for /stats command');
+      console.log(`🔍 Client object has scheduler:`, interaction.client.scheduler ? 'YES' : 'NO');
+      
       await interaction.editReply('❌ Scheduler is not available. The bot may still be initializing or there was an error.');
       return;
     }
     
     console.log('🔄 Starting manual report via /stats command');
-    await scheduler.generateManualReport(interaction);
+    await activeScheduler.generateManualReport(interaction);
   },
 };
