@@ -5,31 +5,22 @@ class AttachmentCounter {
     this.client = client;
     this.weeklyData = new Map();
     this.monthlyData = new Map();
+    this.userCache = new Map(); // Cache for user data to avoid repeated fetches
+  }
+
+  // Clear cache periodically to prevent memory issues
+  clearCache() {
+    this.userCache.clear();
+    console.log('🧹 Cleared user cache');
   }
 
   // Check if user has any of the tracked roles
   userHasTrackedRole(member, trackedRoles) {
     if (!member) {
-      console.log(`❌ No member object provided for role check`);
       return false;
     }
     
     const hasRole = member.roles.cache.some(role => trackedRoles.includes(role.id));
-    
-    // Enhanced debugging
-    if (!hasRole) {
-      console.log(`🔍 Role check FAILED for ${member.user.tag}:`);
-      console.log(`   Needed roles: ${trackedRoles.join(', ')}`);
-      console.log(`   User's role IDs: ${Array.from(member.roles.cache.keys()).join(', ')}`);
-      
-      // Check if any role IDs match
-      const matchingRoles = member.roles.cache.filter(role => trackedRoles.includes(role.id));
-      if (matchingRoles.size > 0) {
-        console.log(`   ⚠️  FOUND MATCHING ROLES:`, matchingRoles.map(r => `${r.name} (${r.id})`));
-      }
-    } else {
-      console.log(`✅ Role check PASSED for ${member.user.tag}`);
-    }
     
     return hasRole;
   }
@@ -62,9 +53,37 @@ class AttachmentCounter {
     return count;
   }
 
+  // Get member data with caching and error handling
+  async getMemberData(guild, userId, username) {
+    // Check cache first
+    const cacheKey = `${guild.id}-${userId}`;
+    if (this.userCache.has(cacheKey)) {
+      return this.userCache.get(cacheKey);
+    }
+
+    // Skip deleted users and bots early
+    if (username === 'Deleted User' || username.includes('#0000')) {
+      this.userCache.set(cacheKey, null);
+      return null;
+    }
+
+    try {
+      const member = await guild.members.fetch(userId);
+      this.userCache.set(cacheKey, member);
+      return member;
+    } catch (error) {
+      // Only log actual errors, not "Unknown Member" (code 10007)
+      if (error.code !== 10007 && !error.message.includes('Unknown Member')) {
+        console.log(`⚠️ Could not fetch member data for ${username}:`, error.message);
+      }
+      this.userCache.set(cacheKey, null);
+      return null;
+    }
+  }
+
   // Scan ALL messages in a channel from sinceDate (with pagination)
   async scanAllChannelMessages(channel, trackedRoles, sinceDate) {
-    console.log(`🔍 Scanning ALL messages in ${channel.name} since ${sinceDate.toLocaleString()}`);
+    console.log(`🔍 Scanning messages in ${channel.name} since ${sinceDate.toLocaleString()}`);
     
     const userStats = new Map();
     let totalMessages = 0;
@@ -72,6 +91,8 @@ class AttachmentCounter {
     let lastMessageId = null;
     let hasMoreMessages = true;
     let batchCount = 0;
+    let deletedUserCount = 0;
+    let skippedMessages = 0;
 
     try {
       while (hasMoreMessages) {
@@ -82,14 +103,18 @@ class AttachmentCounter {
         }
 
         const messages = await channel.messages.fetch(options);
-        console.log(`📦 Batch ${batchCount}: Found ${messages.size} messages in ${channel.name}`);
-
+        
+        // Check if channel is empty
         if (messages.size === 0) {
+          console.log(`📭 Channel ${channel.name} has no messages`);
           hasMoreMessages = false;
           break;
         }
 
+        console.log(`📦 Batch ${batchCount}: Found ${messages.size} messages in ${channel.name}`);
+
         let batchOlderThanRange = false;
+        let processedInBatch = 0;
 
         for (const [messageId, message] of messages) {
           // Stop if we've reached messages older than our date range
@@ -98,32 +123,51 @@ class AttachmentCounter {
             break;
           }
 
-          // Only count messages from users with tracked roles
-          if (message.author.bot) continue;
+          // Skip bot messages
+          if (message.author.bot) {
+            skippedMessages++;
+            continue;
+          }
           
-          // Ensure we have member data
+          // Check for deleted users early
+          if (message.author.tag === 'Deleted User' || message.author.discriminator === '0000') {
+            deletedUserCount++;
+            lastMessageId = messageId;
+            totalMessages++;
+            continue;
+          }
+
+          // Get member data with caching
           let member = message.member;
           if (!member && message.guild) {
-            try {
-              member = await message.guild.members.fetch(message.author.id);
-            } catch (error) {
-              console.log(`❌ Could not fetch member data for ${message.author.tag}:`, error.message);
+            member = await this.getMemberData(message.guild, message.author.id, message.author.tag);
+            if (!member) {
+              deletedUserCount++;
+              lastMessageId = messageId;
+              totalMessages++;
               continue;
             }
           }
 
           if (!member) {
-            console.log(`❌ No member data for ${message.author.tag}, skipping`);
+            deletedUserCount++;
+            lastMessageId = messageId;
+            totalMessages++;
             continue;
           }
           
+          // Check if user has tracked roles
           const hasTrackedRole = this.userHasTrackedRole(member, trackedRoles);
           
           if (!hasTrackedRole) {
+            lastMessageId = messageId;
+            totalMessages++;
             continue;
           }
 
+          // Count media in this message
           const mediaItems = this.countMessageMedia(message);
+          
           if (mediaItems > 0) {
             const userId = message.author.id;
             const username = message.author.tag;
@@ -142,15 +186,21 @@ class AttachmentCounter {
             userData.channels.set(channel.id, (userData.channels.get(channel.id) || 0) + mediaItems);
 
             totalMedia += mediaItems;
+            processedInBatch++;
             
-            // Only log every 10th media item to reduce spam
-            if (totalMedia % 10 === 0) {
-              console.log(`📎 Found ${mediaItems} media items from ${username} in ${channel.name} (Total: ${totalMedia})`);
+            // Log progress every 50 media items
+            if (totalMedia % 50 === 0) {
+              console.log(`📎 Found ${mediaItems} media from ${username} in ${channel.name} (Total: ${totalMedia})`);
             }
           }
 
           totalMessages++;
           lastMessageId = messageId;
+        }
+
+        // Log batch summary
+        if (processedInBatch > 0) {
+          console.log(`✅ Batch ${batchCount}: Processed ${processedInBatch} media items`);
         }
 
         // If this batch contained messages older than our range, we're done
@@ -160,21 +210,32 @@ class AttachmentCounter {
           break;
         }
 
-        // Small delay between batches to avoid rate limits
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Add delay between batches to avoid rate limits (adjustable based on needs)
+        const delay = batchCount % 10 === 0 ? 2000 : 1000; // Longer delay every 10 batches
+        await new Promise(resolve => setTimeout(resolve, delay));
         
-        // Safety limit: don't scan more than 2000 messages per channel
-        if (totalMessages >= 2000) {
-          console.log(`⚠️  Safety limit reached: scanned ${totalMessages} messages in ${channel.name}`);
+        // Safety limit: don't scan more than 5000 messages per channel
+        if (totalMessages >= 5000) {
+          console.log(`⚠️ Safety limit: scanned ${totalMessages} messages in ${channel.name}`);
           break;
         }
       }
 
     } catch (error) {
       console.error(`❌ Error scanning channel ${channel.name}:`, error.message);
+      console.error(`🔍 Error details:`, error.code || 'No error code');
     }
 
-    console.log(`✅ Scanned ${totalMessages} total messages in ${channel.name}, found ${totalMedia} media items in ${batchCount} batches`);
+    // Log summary for this channel
+    console.log(`✅ Scanned ${totalMessages} messages in ${channel.name}`);
+    console.log(`📊 Found ${totalMedia} media items from ${userStats.size} users`);
+    if (deletedUserCount > 0) {
+      console.log(`🗑️  Skipped ${deletedUserCount} messages from deleted users`);
+    }
+    if (skippedMessages > 0) {
+      console.log(`🤖 Skipped ${skippedMessages} bot messages`);
+    }
+    
     return userStats;
   }
 
@@ -189,7 +250,7 @@ class AttachmentCounter {
     try {
       // Fetch active threads in the forum
       const activeThreads = await forumChannel.threads.fetchActive();
-      const archivedThreads = await forumChannel.threads.fetchArchived({ limit: 50 });
+      const archivedThreads = await forumChannel.threads.fetchArchived({ limit: 20 }); // Reduced limit
       
       const allThreads = new Collection();
       activeThreads.threads.forEach(thread => allThreads.set(thread.id, thread));
@@ -199,10 +260,15 @@ class AttachmentCounter {
 
       // Scan each thread
       for (const [threadId, thread] of allThreads) {
-        if (thread.createdAt < sinceDate) continue;
+        // Skip threads created before our date range
+        if (thread.createdAt && thread.createdAt < sinceDate) {
+          console.log(`⏰ Skipping thread ${thread.name} (created before scan range)`);
+          continue;
+        }
         
         totalThreads++;
-        console.log(`📖 Scanning thread: ${thread.name}`);
+        console.log(`📖 Scanning thread ${totalThreads}/${allThreads.size}: ${thread.name}`);
+        
         const threadStats = await this.scanAllChannelMessages(thread, trackedRoles, sinceDate);
         
         // Merge thread stats into forum stats
@@ -220,27 +286,29 @@ class AttachmentCounter {
           overallData.total += userData.total;
           totalMedia += userData.total;
 
-          // Track forum thread as a "channel"
+          // Track forum thread as a "channel" with forum prefix
           const forumThreadKey = `forum-${forumChannel.id}-${thread.id}`;
           overallData.channels.set(forumThreadKey, userData.total);
         }
 
-        // Delay between threads
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Delay between threads to avoid rate limits
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
 
     } catch (error) {
       console.error(`❌ Error scanning forum ${forumChannel.name}:`, error.message);
     }
 
-    console.log(`✅ Scanned ${totalThreads} threads in forum ${forumChannel.name}, found ${totalMedia} media items`);
+    console.log(`✅ Scanned ${totalThreads} threads in forum ${forumChannel.name}`);
+    console.log(`📊 Found ${totalMedia} media items from ${userStats.size} users`);
+    
     return userStats;
   }
 
   // Optimized channel scanning with pagination
   async scanChannel(channel, trackedRoles, sinceDate) {
     console.log(`🔍 Scanning ${channel.type === 15 ? 'forum thread' : 'channel'}: ${channel.name} (${channel.id})`);
-    console.log(`📅 Scanning ALL messages since: ${sinceDate.toLocaleString()}`);
+    console.log(`📅 Scanning messages since: ${sinceDate.toLocaleDateString()}`);
     
     // Handle forum channels differently
     if (channel.type === 15) { // 15 = GUILD_FORUM
@@ -253,7 +321,7 @@ class AttachmentCounter {
     }
   }
 
-  // New method for monthly scanning - MUST BE INSIDE THE CLASS
+  // New method for monthly scanning
   async scanChannelsMonthly(channelIds, trackedRoles) {
     console.log(`🔄 Starting MONTHLY attachment scan for ${channelIds.length} channels...`);
     console.log(`🎯 Tracking users with ANY of these roles: ${trackedRoles.join(', ')}`);
@@ -264,11 +332,21 @@ class AttachmentCounter {
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     
+    console.log(`📅 Scanning period: ${firstDayOfMonth.toLocaleDateString()} to ${now.toLocaleDateString()}`);
+    
     let totalChannelsScanned = 0;
+    let startTime = Date.now();
 
     for (const channelId of channelIds) {
       totalChannelsScanned++;
+      
+      // Clear cache every 10 channels to prevent memory issues
+      if (totalChannelsScanned % 10 === 0) {
+        this.clearCache();
+      }
+      
       console.log(`\n📊 Progress: ${totalChannelsScanned}/${channelIds.length} channels`);
+      console.log(`⏱️  Elapsed: ${Math.floor((Date.now() - startTime) / 1000)} seconds`);
       
       const channel = this.client.channels.cache.get(channelId);
       if (!channel) {
@@ -303,38 +381,69 @@ class AttachmentCounter {
       const currentTotal = Array.from(allUserStats.values()).reduce((sum, user) => sum + user.total, 0);
       console.log(`📈 Running total: ${currentTotal} media items from ${allUserStats.size} users`);
 
-      // Small delay to avoid rate limits
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Variable delay based on progress
+      const delay = totalChannelsScanned % 5 === 0 ? 3000 : 2000;
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
 
-    console.log(`\n🎯 MONTHLY SCAN FINISHED!`);
+    const totalTime = Math.floor((Date.now() - startTime) / 1000);
+    console.log(`\n🎯 MONTHLY SCAN COMPLETE!`);
+    console.log(`⏱️  Total time: ${totalTime} seconds`);
     console.log(`📊 Scanned ${totalChannelsScanned} channels`);
     console.log(`👤 Found ${allUserStats.size} users with media items`);
     
     // Log user totals
     let grandTotal = 0;
-    for (const [userId, userData] of allUserStats) {
-      console.log(`👤 ${userData.username} (${userId}) - ${userData.total} media items`);
+    const sortedUsers = Array.from(allUserStats.entries())
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 10); // Show top 10 users
+    
+    console.log(`🏆 TOP CONTRIBUTORS:`);
+    for (const [userId, userData] of sortedUsers) {
+      console.log(`  👤 ${userData.username}: ${userData.total} media items`);
       grandTotal += userData.total;
     }
     
+    // Add remaining users to total
+    if (allUserStats.size > 10) {
+      const remainingUsers = Array.from(allUserStats.values())
+        .slice(10)
+        .reduce((sum, user) => sum + user.total, 0);
+      grandTotal += remainingUsers;
+      console.log(`  ... and ${allUserStats.size - 10} more users with ${remainingUsers} items`);
+    }
+    
     console.log(`🏆 MONTHLY GRAND TOTAL: ${grandTotal} media items found`);
+    
+    // Clear cache at the end
+    this.clearCache();
     
     return allUserStats;
   }
 
   // Weekly scanning method
   async scanChannels(channelIds, trackedRoles) {
-    console.log(`🔄 Starting COMPLETE attachment scan for ${channelIds.length} channels...`);
+    console.log(`🔄 Starting WEEKLY attachment scan for ${channelIds.length} channels...`);
     console.log(`🎯 Tracking users with ANY of these roles: ${trackedRoles.join(', ')}`);
     
     const allUserStats = new Map();
     const sinceDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Last 7 days
+    
+    console.log(`📅 Scanning period: ${sinceDate.toLocaleDateString()} to ${new Date().toLocaleDateString()}`);
+    
     let totalChannelsScanned = 0;
+    let startTime = Date.now();
 
     for (const channelId of channelIds) {
       totalChannelsScanned++;
+      
+      // Clear cache every 10 channels
+      if (totalChannelsScanned % 10 === 0) {
+        this.clearCache();
+      }
+      
       console.log(`\n📊 Progress: ${totalChannelsScanned}/${channelIds.length} channels`);
+      console.log(`⏱️  Elapsed: ${Math.floor((Date.now() - startTime) / 1000)} seconds`);
       
       const channel = this.client.channels.cache.get(channelId);
       if (!channel) {
@@ -369,22 +478,41 @@ class AttachmentCounter {
       const currentTotal = Array.from(allUserStats.values()).reduce((sum, user) => sum + user.total, 0);
       console.log(`📈 Running total: ${currentTotal} media items from ${allUserStats.size} users`);
 
-      // Small delay to avoid rate limits
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Variable delay
+      const delay = totalChannelsScanned % 5 === 0 ? 3000 : 2000;
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
 
-    console.log(`\n🎯 COMPLETE SCAN FINISHED!`);
+    const totalTime = Math.floor((Date.now() - startTime) / 1000);
+    console.log(`\n🎯 WEEKLY SCAN COMPLETE!`);
+    console.log(`⏱️  Total time: ${totalTime} seconds`);
     console.log(`📊 Scanned ${totalChannelsScanned} channels`);
     console.log(`👤 Found ${allUserStats.size} users with media items`);
     
     // Log user totals
     let grandTotal = 0;
-    for (const [userId, userData] of allUserStats) {
-      console.log(`👤 ${userData.username} (${userId}) - ${userData.total} media items`);
+    const sortedUsers = Array.from(allUserStats.entries())
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 10);
+    
+    console.log(`🏆 TOP CONTRIBUTORS:`);
+    for (const [userId, userData] of sortedUsers) {
+      console.log(`  👤 ${userData.username}: ${userData.total} media items`);
       grandTotal += userData.total;
     }
     
-    console.log(`🏆 GRAND TOTAL: ${grandTotal} media items found`);
+    if (allUserStats.size > 10) {
+      const remainingUsers = Array.from(allUserStats.values())
+        .slice(10)
+        .reduce((sum, user) => sum + user.total, 0);
+      grandTotal += remainingUsers;
+      console.log(`  ... and ${allUserStats.size - 10} more users with ${remainingUsers} items`);
+    }
+    
+    console.log(`🏆 WEEKLY GRAND TOTAL: ${grandTotal} media items found`);
+    
+    // Clear cache at the end
+    this.clearCache();
     
     return allUserStats;
   }
@@ -416,7 +544,8 @@ class AttachmentCounter {
       });
     }
 
-    return channelData;
+    // Sort by total media
+    return new Map([...channelData.entries()].sort((a, b) => b[1].total - a[1].total));
   }
 
   // Get top users sorted by attachment count
