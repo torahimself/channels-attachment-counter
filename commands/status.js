@@ -9,7 +9,6 @@ module.exports = {
     .setDescription('Check bot status and next report time'),
   
   async execute(interaction) {
-    // Check if user has the allowed role
     const member = interaction.member;
     const hasAllowedRole = member.roles.cache.has(ALLOWED_ROLE_ID);
     
@@ -22,21 +21,19 @@ module.exports = {
     const nextFriday = new Date();
     const nextMonthStart = new Date();
     
-    // Calculate next Friday 2:00 PM Riyadh time
+    // Calculate next Friday 1:00 AM Riyadh time
     nextFriday.setDate(now.getDate() + (5 - now.getDay() + 7) % 7);
-    nextFriday.setHours(14, 0, 0, 0); // 2 PM Riyadh time
+    nextFriday.setHours(1, 0, 0, 0); // 1 AM Riyadh time
     
-    // Calculate 1st of next month 2:00 PM Riyadh time
+    // Calculate 1st of next month 1:00 AM Riyadh time
     nextMonthStart.setMonth(now.getMonth() + 1, 1);
-    nextMonthStart.setHours(14, 0, 0, 0);
+    nextMonthStart.setHours(1, 0, 0, 0);
     
-    // Calculate time until next Friday report
+    // Calculate time until reports
     const timeUntilFriday = nextFriday.getTime() - now.getTime();
     const daysUntilFriday = Math.floor(timeUntilFriday / (1000 * 60 * 60 * 24));
     const hoursUntilFriday = Math.floor((timeUntilFriday % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutesUntilFriday = Math.floor((timeUntilFriday % (1000 * 60 * 60)) / (1000 * 60));
     
-    // Calculate time until next monthly report
     const timeUntilMonthly = nextMonthStart.getTime() - now.getTime();
     const daysUntilMonthly = Math.floor(timeUntilMonthly / (1000 * 60 * 60 * 24));
     const hoursUntilMonthly = Math.floor((timeUntilMonthly % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
@@ -61,18 +58,18 @@ module.exports = {
           inline: true
         },
         {
-          name: "⏰ Time Until Weekly",
-          value: `${daysUntilFriday}d ${hoursUntilFriday}h ${minutesUntilFriday}m`,
+          name: "⏰ Weekly Time",
+          value: `${daysUntilFriday}d ${hoursUntilFriday}h`,
           inline: true
         },
         {
-          name: "📅 Time Until Monthly",
-          value: `${daysUntilMonthly} days ${hoursUntilMonthly} hours`,
+          name: "📅 Monthly Time",
+          value: `${daysUntilMonthly}d ${hoursUntilMonthly}h`,
           inline: true
         },
         {
           name: "📁 Channels Monitored",
-          value: "50 channels + 4 forums",
+          value: "All channels in 3 categories + 45 specific channels",
           inline: true
         },
         {
@@ -82,12 +79,12 @@ module.exports = {
         },
         {
           name: "🕒 Weekly Schedule",
-          value: "Every Friday 2:00 PM Riyadh Time",
+          value: "Every Friday 1:00 AM Riyadh Time",
           inline: true
         },
         {
           name: "📅 Monthly Schedule",
-          value: "1st of each month 2:00 PM Riyadh Time",
+          value: "1st of each month 1:00 AM Riyadh Time",
           inline: true
         }
       ],
