@@ -1,6 +1,9 @@
 const { REST, Routes } = require('discord.js');
 const config = require('../config.js');
 const commandHandler = require('../handlers/commandHandler');
+const AttachmentCounter = require('../utils/attachmentCounter');
+const ReportGenerator = require('../utils/reportGenerator');
+const Scheduler = require('../utils/scheduler');
 const interactionHandler = require('./interactionCreate');
 
 module.exports = {
@@ -10,48 +13,65 @@ module.exports = {
     console.log(`🎉 READY EVENT FIRED! Bot logged in as ${client.user.tag}!`);
 
     try {
-      // Initialize core systems - IMPORT HERE to avoid circular dependencies
-      console.log('🔄 Initializing core systems...');
-      const AttachmentCounter = require('../utils/attachmentCounter');
-      const ReportGenerator = require('../utils/reportGenerator');
-      const Scheduler = require('../utils/scheduler');
-      
+      console.log('🔄 Initializing attachment counter...');
       const attachmentCounter = new AttachmentCounter(client);
+      
+      console.log('🔄 Initializing report generator...');
       const reportGenerator = new ReportGenerator(client);
+      
+      console.log('🔄 Initializing scheduler...');
       const scheduler = new Scheduler(client, attachmentCounter, reportGenerator);
       
-      // Store on client
+      // Store on client for global access
       client.scheduler = scheduler;
       console.log('✅ Scheduler attached to client object');
 
       // Share scheduler with interaction handler
+      console.log('🔄 Setting scheduler in interaction handler...');
       interactionHandler.setScheduler(scheduler);
-      console.log('✅ Scheduler set in interaction handler');
+      console.log('✅ Scheduler set in interaction handler!');
 
-      // Load and register commands
-      commandHandler.loadCommands();
-      
+      // Register slash commands
+      console.log('🔄 Registering slash commands...');
       const rest = new REST({ version: '10' }).setToken(config.botToken);
       const commands = commandHandler.getCommands();
       
-      console.log(`📋 Registering ${commands.length} commands...`);
+      console.log(`📋 Commands to register:`, commands.map(cmd => cmd.name));
       
-      const data = await rest.put(
-        Routes.applicationCommands(client.user.id),
-        { body: commands }
-      );
-      
-      console.log(`✅ Registered ${data.length} commands`);
+      if (commands.length > 0) {
+        console.log(`🔄 Registering ${commands.length} commands...`);
+        
+        const data = await rest.put(
+          Routes.applicationCommands(client.user.id),
+          { body: commands }
+        );
+        
+        console.log(`✅ Successfully registered ${data.length} application commands!`);
+      }
 
-      // Start scheduler
+      // Start both weekly and monthly schedulers
+      console.log('🔄 Starting schedulers...');
       scheduler.scheduleWeeklyReport();
-      console.log('⏰ Schedulers started');
+      console.log('⏰ Weekly and Monthly report schedulers started!');
+
+      // Calculate next report times
+      const now = new Date();
+      const nextFriday = new Date();
+      const nextMonthStart = new Date();
       
-      console.log('🤖 Bot is fully operational!');
+      nextFriday.setDate(now.getDate() + (5 - now.getDay() + 7) % 7);
+      nextFriday.setHours(1, 0, 0, 0); // 1 AM Riyadh time
+      
+      nextMonthStart.setMonth(now.getMonth() + 1, 1);
+      nextMonthStart.setHours(1, 0, 0, 0);
+      
+      console.log(`📅 Next weekly report: ${nextFriday.toLocaleString()} (Riyadh Time)`);
+      console.log(`📅 Next monthly report: ${nextMonthStart.toLocaleString()} (Riyadh Time)`);
+      console.log('🤖 Attachment Counter Bot is fully operational!');
 
     } catch (error) {
-      console.error('❌ Error during initialization:', error.message);
-      console.error('🔍 Stack trace:', error.stack);
+      console.error('❌ Error during bot initialization:', error);
+      console.error('Full error details:', error);
     }
   }
 };
