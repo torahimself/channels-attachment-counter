@@ -46,8 +46,8 @@ module.exports = {
   monthlyReportChannel: "1435870655508774972", // Same or different channel
   
   // Schedules (1:00 AM Riyadh time = 10:00 PM UTC previous day)
-  weeklySchedule: "0 22 * * 4", // Thursday 10:00 PM UTC = Friday 1:00 AM Riyadh
-  monthlySchedule: "0 22 28-31 * *", // Runs at 10 PM UTC on 28th-31st, checks if next day is 1st
+weeklySchedule: "0 22 * * 4", // Thursday 10:00 PM UTC = Friday 1:00 AM Riyadh
+monthlySchedule: "0 22 28-31 * *", // Runs at 10 PM UTC on 28th-31st, checks if next day is 1st
   
   // Timezone for reporting
   timezone: "Asia/Riyadh"
