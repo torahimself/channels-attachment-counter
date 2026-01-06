@@ -12,7 +12,6 @@ module.exports = {
   async execute(interaction, scheduler = null) {
     console.log(`🔧 /statsm command received from ${interaction.user.tag}`);
     
-    // Check if user has the allowed role
     const member = interaction.member;
     const hasAllowedRole = member.roles.cache.has(ALLOWED_ROLE_ID);
     
@@ -24,21 +23,21 @@ module.exports = {
 
     console.log(`✅ User ${interaction.user.tag} has permission, proceeding with /statsm`);
     
-    // The scheduler should now be provided by interactionCreate.js
-    // If it's still null, we'll handle it here
-    if (!scheduler) {
-      console.log('❌ Scheduler parameter is NULL in statsm command');
-      console.log(`🔍 Checking client.scheduler:`, interaction.client.scheduler ? 'EXISTS' : 'NULL');
-      
-      await interaction.editReply('❌ Scheduler is not available. The bot may still be initializing. Please wait 10 seconds and try again, or restart the bot.');
+    // Get scheduler from parameter or client
+    let activeScheduler = scheduler || interaction.client.scheduler;
+    
+    console.log(`🔍 Scheduler object:`, activeScheduler ? 'Exists' : 'NULL');
+    
+    if (!activeScheduler) {
+      console.log('❌ Scheduler not available for /statsm command');
+      await interaction.editReply('❌ Scheduler is not available. The bot is still initializing. Please wait 30 seconds and try again, or check the bot logs.');
       return;
     }
     
     console.log('🔄 Starting manual monthly report via /statsm command');
-    console.log(`🔍 Scheduler type: ${scheduler.constructor.name}`);
     
     try {
-      await scheduler.generateManualMonthlyReport(interaction);
+      await activeScheduler.generateManualMonthlyReport(interaction);
     } catch (error) {
       console.error(`❌ Error in generateManualMonthlyReport:`, error.message);
       console.error(`🔍 Error stack:`, error.stack);
