@@ -10,13 +10,20 @@ class Scheduler {
     this.isMonthlyRunning = false;
   }
 
+  // Helper to check if tomorrow is the first day of month
+  isLastDayOfMonth() {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return tomorrow.getDate() === 1;
+  }
+
   // Schedule both weekly and monthly reports
   scheduleWeeklyReport() {
-    console.log(`⏰ Scheduling weekly reports: ${config.weeklySchedule} (Friday 2:00 PM Riyadh Time)`);
-    console.log(`⏰ Scheduling monthly reports: ${config.monthlySchedule} (1st of month 2:00 PM Riyadh Time)`);
-    console.log(`📁 Scanning ${config.channels.length} specified channels`);
+    console.log(`⏰ Scheduling weekly reports: ${config.weeklySchedule} (Friday 1:00 AM Riyadh Time)`);
+    console.log(`⏰ Scheduling monthly reports: ${config.monthlySchedule} (1st of month 1:00 AM Riyadh Time)`);
     
-    // Schedule weekly report
+    // Schedule weekly report (Friday 1:00 AM Riyadh = Thursday 10:00 PM UTC)
     const weeklyTask = cron.schedule(config.weeklySchedule, async () => {
       if (this.isRunning) {
         console.log('⚠️  Weekly report generation already in progress, skipping...');
@@ -39,8 +46,14 @@ class Scheduler {
       timezone: config.timezone
     });
 
-    // Schedule monthly report
+    // Schedule monthly report (checks on 28th-31st, runs on 1st at 1:00 AM Riyadh)
     const monthlyTask = cron.schedule(config.monthlySchedule, async () => {
+      // Only run if tomorrow is the first day of month
+      if (!this.isLastDayOfMonth()) {
+        console.log('⏰ Not the last day of month, skipping monthly report...');
+        return;
+      }
+
       if (this.isMonthlyRunning) {
         console.log('⚠️  Monthly report generation already in progress, skipping...');
         return;
@@ -77,7 +90,7 @@ class Scheduler {
         return;
       }
 
-      // Check if bot can send messages to report channel
+      // Check if bot can send messages
       const canSend = reportChannel.permissionsFor(this.client.user)?.has('SendMessages');
       if (!canSend) {
         console.log(`❌ Bot cannot send messages to ${reportType} report channel`);
@@ -86,12 +99,7 @@ class Scheduler {
 
       console.log(`🔍 Scanning for ${reportType} media...`);
       
-      let userStats;
-      if (isMonthly) {
-        userStats = await this.attachmentCounter.scanChannelsMonthly(config.channels, config.trackedRoles);
-      } else {
-        userStats = await this.attachmentCounter.scanChannels(config.channels, config.trackedRoles);
-      }
+      const userStats = await this.attachmentCounter.scanChannels(config, config.trackedRoles, reportType);
       
       console.log(`📊 ${reportType.toUpperCase()} scan completed. Users found: ${userStats.size}`);
       
@@ -105,18 +113,23 @@ class Scheduler {
         return;
       }
 
-      const topUsers = this.attachmentCounter.getTopUsers(userStats, 10);
-      const channelBreakdown = this.attachmentCounter.getChannelBreakdown(userStats, config.channels);
+      const topUsers = this.attachmentCounter.getTopUsers(userStats, 15); // Show more users
+      const channelBreakdown = this.attachmentCounter.getChannelBreakdown(userStats, this.attachmentCounter.getAllChannelsToScan(config));
       const totalMedia = this.reportGenerator.calculateTotalMedia(userStats);
 
       console.log(`📈 Generating ${reportType} report: ${totalMedia} total media, ${topUsers.length} top users`);
 
-      // Send main report
+      // Send main report with ALL user mentions
       console.log(`📊 Generating ${reportType} main report...`);
-      const mainEmbed = this.reportGenerator.generateMainReport(topUsers, channelBreakdown, totalMedia, reportType);
+      const mainEmbed = this.reportGenerator.generateMainReport(topUsers, channelBreakdown, totalMedia, reportType, userStats);
       try {
+        // Create mention list for all users
+        const allUserMentions = Array.from(userStats.values())
+          .map(user => user.userMention)
+          .join(' ');
+          
         await reportChannel.send({ 
-          content: `📊 **${reportType.toUpperCase()} MEDIA REPORT**`, 
+          content: `📊 **${reportType.toUpperCase()} MEDIA REPORT**\n\n**All Contributors:** ${allUserMentions}\n\n**Total Media:** ${totalMedia} items from ${userStats.size} users`, 
           embeds: [mainEmbed] 
         });
       } catch (error) {
@@ -124,18 +137,21 @@ class Scheduler {
         return;
       }
 
-      // Send individual user reports
+      // Send individual user reports with detailed breakdown
       console.log(`👤 Generating ${userStats.size} individual user reports for ${reportType}...`);
       let userReportCount = 0;
       for (const [userId, userData] of userStats) {
         if (userData.total > 0) {
           try {
             const userEmbed = this.reportGenerator.generateUserEmbed(userId, userData, this.client, reportType);
-            await reportChannel.send({ embeds: [userEmbed] });
+            await reportChannel.send({ 
+              content: `**User Report:** <@${userId}>`, 
+              embeds: [userEmbed] 
+            });
             userReportCount++;
             
-            // Small delay to avoid rate limits
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Delay to avoid rate limits
+            await new Promise(resolve => setTimeout(resolve, 300));
           } catch (error) {
             console.error(`❌ Error sending ${reportType} user report for ${userId}:`, error.message);
           }
@@ -177,8 +193,7 @@ class Scheduler {
       console.error('❌ Error in manual weekly report generation:', error);
       
       if (interaction) {
-        const errorMessage = '❌ Error generating weekly report! Check console for details.';
-        await interaction.editReply(errorMessage);
+        await interaction.editReply('❌ Error generating weekly report! Check console for details.');
       }
     } finally {
       this.isRunning = false;
@@ -212,8 +227,7 @@ class Scheduler {
       console.error('❌ Error in manual monthly report generation:', error);
       
       if (interaction) {
-        const errorMessage = '❌ Error generating monthly report! Check console for details.';
-        await interaction.editReply(errorMessage);
+        await interaction.editReply('❌ Error generating monthly report! Check console for details.');
       }
     } finally {
       this.isMonthlyRunning = false;
